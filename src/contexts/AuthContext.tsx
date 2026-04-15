@@ -1,278 +1,111 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { User } from "../types";
-import { determineUserRole, getInitials, getNameFromEmail } from "../utils/auth";
-import { supabase } from "../utils/supabase/client";
-import { projectId, publicAnonKey } from "../utils/supabase/info";
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { User } from '../types';
+import { getInitials, getNameFromEmail } from '../utils/auth';
+import { supabase, authApi, profilesApi, Profile } from '../lib/supabase';
 
 interface AuthContextType {
   currentUser: User | null;
   login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
-  switchAccount: (userId: string) => void;
-  getAllAccounts: () => User[];
+  logout: () => Promise<void>;
   isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/** Convertit un profil Supabase en objet User local */
+function mapProfile(profile: Profile): User {
+  return {
+    id:        profile.id,
+    email:     profile.email,
+    name:      profile.name,
+    role:      profile.role,          // ✅ rôle lu depuis la DB, pas depuis l'email
+    initials:  getInitials(profile.name),
+    status:    profile.status,
+    isOnline:  profile.is_online,
+    lastSeen:  profile.last_seen ? new Date(profile.last_seen) : new Date(),
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading]     = useState(true);
 
-  // Charger l'utilisateur depuis la session Supabase au démarrage
+  // ── Marquer hors ligne à la fermeture de l'onglet ────────────────────
   useEffect(() => {
-    const loadUser = async () => {
-      try {
-        console.log('🔄 Loading user session from Supabase...');
-        
-        // Vérifier s'il y a une session Supabase active
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error("Error loading session:", error);
-          localStorage.removeItem('supabase_session');
-          setIsLoading(false);
-          return;
-        }
-
-        if (session?.user) {
-          console.log('✅ Active session found for:', session.user.email);
-          
-          // Créer l'objet User à partir des métadonnées Supabase
-          const user: User = {
-            id: session.user.id,
-            email: session.user.email || '',
-            name: session.user.user_metadata?.name || getNameFromEmail(session.user.email || ''),
-            role: session.user.user_metadata?.role || determineUserRole(session.user.email || ''),
-            initials: session.user.user_metadata?.initials || getInitials(session.user.user_metadata?.name || ''),
-            status: session.user.user_metadata?.status || 'active',
-            isOnline: true,
-            lastSeen: new Date(),
-          };
-
-          setCurrentUser(user);
-          updateLocalAccounts(user);
-
-          // Sauvegarder la session dans localStorage pour référence
-          localStorage.setItem('supabase_session', JSON.stringify({
-            access_token: session.access_token,
-            user: user
-          }));
-
-          console.log('✅ User loaded from Supabase session:', user.email);
-        } else {
-          console.log('ℹ️ No active session found');
-        }
-      } catch (error) {
-        console.error("Error loading user:", error);
-        localStorage.removeItem('supabase_session');
-      } finally {
-        setIsLoading(false);
+    const handleUnload = () => {
+      if (currentUser) {
+        // navigator.sendBeacon est non-bloquant et survivra à la fermeture
+        profilesApi.setOnline(currentUser.id, false);
       }
     };
+    window.addEventListener('beforeunload', handleUnload);
+    return () => window.removeEventListener('beforeunload', handleUnload);
+  }, [currentUser]);
 
-    loadUser();
+  // ── Écouter les changements de session Supabase Auth ─────────────────
+  useEffect(() => {
+    const { data: { subscription } } = authApi.onAuthChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        const { data: profile, error } = await profilesApi.getById(session.user.id);
+        if (error || !profile) {
+          // Profil pas encore créé (trigger async) — fallback minimal
+          setCurrentUser({
+            id:       session.user.id,
+            email:    session.user.email || '',
+            name:     session.user.user_metadata?.name || getNameFromEmail(session.user.email || ''),
+            role:     session.user.user_metadata?.role || 'user',
+            initials: getInitials(session.user.user_metadata?.name || ''),
+            status:   'active',
+            isOnline: true,
+            lastSeen: new Date(),
+          });
+        } else {
+          setCurrentUser(mapProfile(profile));
+          await profilesApi.setOnline(profile.id, true);
+        }
+      }
+
+      if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+      }
+
+      if (event === 'INITIAL_SESSION') {
+        setIsLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  // Mettre à jour la liste des comptes dans localStorage
-  const updateLocalAccounts = (user: User) => {
-    const accounts = JSON.parse(localStorage.getItem('all_accounts') || '[]');
-    const existingIndex = accounts.findIndex((acc: User) => acc.id === user.id);
-    
-    if (existingIndex >= 0) {
-      accounts[existingIndex] = user;
-    } else {
-      accounts.push(user);
-    }
-    
-    localStorage.setItem('all_accounts', JSON.stringify(accounts));
-  };
-
+  // ── Login ─────────────────────────────────────────────────────────────
   const login = async (email: string, password: string): Promise<boolean> => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      
-      console.log('🔐 Attempting Supabase login for:', email);
-      
-      // Appeler l'endpoint de signin sur le serveur
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f44f03da/auth/signin`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify({ email, password }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok || data.error) {
-        console.error('❌ Login failed:', data.error);
-        
-        // Analyser le type d'erreur pour décider de l'action
-        const errorMessage = data.error || '';
-        
-        // Si le serveur indique que l'utilisateur existe avec un mauvais mot de passe
-        if (data.userExists) {
-          console.error('❌ Wrong password for existing account');
-          console.error('💡 Solution: Use a different email or click "Nouveau Départ"');
-          return false;
-        }
-        
-        // Si l'utilisateur n'existe pas, créer le compte
-        if (errorMessage.includes('Email not confirmed') || 
-            errorMessage.includes('User not found') ||
-            errorMessage.includes('not registered')) {
-          console.log('📝 Account not found, creating new account...');
-          return await signup(email, password);
-        }
-        
-        // Si c'est une erreur de credentials invalides (mauvais mot de passe pour compte existant)
-        if (errorMessage.includes('Invalid login credentials')) {
-          console.error('❌ Wrong password for existing account');
-          console.error('💡 Solution: Use a different email or click "Nouveau Départ"');
-          return false;
-        }
-        
-        // Si le compte existe déjà (erreur de signup)
-        if (errorMessage.includes('already been registered')) {
-          console.error('❌ Account exists - please use the correct password');
-          return false;
-        }
-        
+      const { error } = await authApi.signIn(email, password);
+      if (error) {
+        console.error('Login error:', error.message);
         return false;
       }
-
-      if (data.session && data.user) {
-        // Log si le compte a été créé automatiquement
-        if (data.accountCreated) {
-          console.log('🎉 Account created automatically!');
-        }
-        console.log('✅ Login successful!');
-        
-        // Définir la session dans Supabase client
-        await supabase.auth.setSession({
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-        });
-
-        // Créer l'objet User
-        const user: User = {
-          id: data.user.id,
-          email: data.user.email,
-          name: data.user.user_metadata?.name || getNameFromEmail(data.user.email),
-          role: data.user.user_metadata?.role || determineUserRole(data.user.email),
-          initials: data.user.user_metadata?.initials || getInitials(data.user.user_metadata?.name || ''),
-          status: data.user.user_metadata?.status || 'active',
-          isOnline: true,
-          lastSeen: new Date(),
-        };
-
-        setCurrentUser(user);
-        updateLocalAccounts(user);
-
-        // Sauvegarder la session
-        localStorage.setItem('supabase_session', JSON.stringify({
-          access_token: data.session.access_token,
-          user: user
-        }));
-
-        return true;
-      }
-
-      return false;
-    } catch (error: any) {
-      console.error("❌ Login error:", error);
+      return true;
+    } catch (err) {
+      console.error('Unexpected login error:', err);
       return false;
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Fonction signup pour créer automatiquement un compte
-  const signup = async (email: string, password: string): Promise<boolean> => {
-    try {
-      const role = determineUserRole(email);
-      const name = getNameFromEmail(email);
-
-      console.log('📝 Creating account for:', email, 'with role:', role);
-
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f44f03da/auth/signup`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify({ email, password, name, role }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok || data.error) {
-        console.error('❌ Signup failed:', data.error);
-        return false;
-      }
-
-      console.log('✅ Account created successfully! Now logging in...');
-      
-      // Se connecter automatiquement après l'inscription
-      return await login(email, password);
-    } catch (error) {
-      console.error("❌ Signup error:", error);
-      return false;
-    }
-  };
-
+  // ── Logout ────────────────────────────────────────────────────────────
   const logout = async () => {
-    try {
-      console.log('👋 Logging out...');
-      
-      // Déconnecter de Supabase
-      await supabase.auth.signOut();
-      
-      // Nettoyer le localStorage
-      localStorage.removeItem('supabase_session');
-      
-      setCurrentUser(null);
-      
-      console.log('✅ Logged out successfully');
-    } catch (error) {
-      console.error('Error during logout:', error);
+    if (currentUser) {
+      await profilesApi.setOnline(currentUser.id, false);
     }
-  };
-
-  const switchAccount = async (userId: string) => {
-    const accounts = JSON.parse(localStorage.getItem('all_accounts') || '[]');
-    const user = accounts.find((acc: User) => acc.id === userId);
-    
-    if (user) {
-      // Pour changer de compte, on doit se déconnecter et se reconnecter
-      // Ceci est une limitation - pour un vrai switch, il faudrait stocker
-      // les credentials de chaque compte, ce qui n'est pas sécurisé
-      console.log('⚠️ Account switching requires re-login with that account credentials');
-      
-      setCurrentUser(user);
-      
-      // Mettre à jour la session locale (mais ce ne sera pas une vraie session Supabase)
-      localStorage.setItem('supabase_session', JSON.stringify({
-        access_token: null,
-        user: user
-      }));
-    }
-  };
-
-  const getAllAccounts = (): User[] => {
-    return JSON.parse(localStorage.getItem('all_accounts') || '[]');
+    await authApi.signOut();
+    // setCurrentUser(null) sera déclenché par onAuthChange(SIGNED_OUT)
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, login, logout, switchAccount, getAllAccounts, isLoading }}>
+    <AuthContext.Provider value={{ currentUser, login, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
@@ -280,8 +113,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 }
