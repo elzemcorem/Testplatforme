@@ -16,6 +16,7 @@ import { DateTimePicker } from "./DateTimePicker";
 import { toast } from "sonner@2.0.3";
 import { useAuth } from "../contexts/AuthContext";
 import { Reservation } from "../types";
+import { reservationService } from "../services/reservationService";
 
 interface ReservationFormProps {
   isOpen: boolean;
@@ -63,36 +64,29 @@ export function ReservationForm({ isOpen, onClose, vehicleName, vehicleId }: Res
     try {
       console.log("🚀 Submitting reservation for:", vehicleName);
       
-      // Créer un ID temporaire pour la réservation locale
-      const tempId = `reservation_${Date.now()}`;
-      const localReservation: Reservation = {
-        id: tempId,
-        ...reservationData,
-        createdAt: new Date(),
-      };
+      const created = await reservationService.createReservation(reservationData);
       
-      // Stocker immédiatement dans localStorage pour affichage rapide
-      const existingReservations = localStorage.getItem("reservations");
-      const reservations = existingReservations ? JSON.parse(existingReservations) : [];
-      reservations.push(localReservation);
-      localStorage.setItem("reservations", JSON.stringify(reservations));
-      console.log("✅ Reservation stored in localStorage");
-      
-      // Réinitialiser le formulaire
-      setName("");
-      setDestination("");
-      setPurpose("");
-      setNeedDriver("no");
-      setStartDate(undefined);
-      setEndDate(undefined);
+      if (created) {
+        console.log("✅ Reservation created successfully");
+        
+        // Réinitialiser le formulaire
+        setName("");
+        setDestination("");
+        setPurpose("");
+        setNeedDriver("no");
+        setStartDate(undefined);
+        setEndDate(undefined);
 
-      // Notification de succès
-      toast.success(`Votre réservation pour ${vehicleName} a été enregistrée avec succès.`);
+        // Notification de succès
+        toast.success(`Votre réservation pour ${vehicleName} a été enregistrée avec succès.`);
 
-      // Fermer le dialog
-      onClose();
+        // Fermer le dialog
+        onClose();
+      } else {
+        toast.error("Erreur lors de la création de la réservation");
+      }
     } catch (error) {
-      console.error("Error creating reservation:", error);
+      console.error("❌ Error creating reservation:", error);
       toast.error("Erreur lors de la création de la réservation");
     }
   };

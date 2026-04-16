@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -18,6 +18,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner@2.0.3";
+import { reservationService } from "../services/reservationService";
 
 export function ReservationsPage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -25,46 +26,61 @@ export function ReservationsPage() {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const { currentUser } = useAuth();
+  const unsubscribeRef = useRef<(() => void) | null>(null);
 
-  // Charger les réservations depuis localStorage
+  // Charger les réservations et configurer Realtime
   useEffect(() => {
-    loadReservations();
-    
-    // Écouter les changements dans localStorage
-    const handleStorageChange = () => {
-      loadReservations();
+    const initializeReservations = async () => {
+      try {
+        console.log("📥 Chargement des réservations");
+        
+        // Charger les réservations existantes
+        const loaded = await reservationService.loadReservations();
+        setReservations(loaded);
+
+        // S'abonner à tous les changements
+        const unsubscribe = reservationService.subscribeToReservations(
+          (reservation, action) => {
+            console.log(`📝 Réservation ${action}:`, reservation.id);
+
+            setReservations((prev) => {
+              if (action === "created") {
+                // Vérifier que la réservation n'existe pas déjà
+                if (prev.some((r) => r.id === reservation.id)) {
+                  return prev;
+                }
+                return [reservation, ...prev];
+              } else if (action === "updated") {
+                return prev.map((r) =>
+                  r.id === reservation.id ? reservation : r
+                );
+              } else if (action === "deleted") {
+                return prev.filter((r) => r.id !== reservation.id);
+              }
+              return prev;
+            });
+          }
+        );
+
+        unsubscribeRef.current = unsubscribe;
+      } catch (error) {
+        console.error("❌ Erreur lors de l'initialisation des réservations:", error);
+        toast.error("Erreur lors du chargement des réservations");
+      }
     };
-    
-    window.addEventListener("storage", handleStorageChange);
-    // Polling toutes les 2 secondes pour simuler le temps réel
-    const interval = setInterval(loadReservations, 2000);
-    
+
+    initializeReservations();
+
+    // Cleanup
     return () => {
-      window.removeEventListener("storage", handleStorageChange);
-      clearInterval(interval);
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
     };
   }, []);
 
-  const loadReservations = () => {
-    const stored = localStorage.getItem("reservations");
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        // Convertir les dates string en Date objects
-        const reservationsWithDates = parsed.map((res: any) => ({
-          ...res,
-          startDate: new Date(res.startDate),
-          endDate: new Date(res.endDate),
-          createdAt: new Date(res.createdAt),
-        }));
-        setReservations(reservationsWithDates);
-      } catch (error) {
-        console.error("Error loading reservations:", error);
-      }
-    }
-  };
-
-  const handleValidate = (reservation: Reservation) => {
+  const handleValidate = async (reservation: Reservation) => {
     // Vérifier que l'utilisateur est un contrôleur
     if (currentUser?.role !== "controller") {
       toast.error("Accès refusé", {
@@ -73,17 +89,29 @@ export function ReservationsPage() {
       return;
     }
     
-    const updated = reservations.map((res) =>
-      res.id === reservation.id
-        ? { ...res, status: "validated" as const, validatedBy: currentUser?.name }
-        : res
-    );
-    setReservations(updated);
-    localStorage.setItem("reservations", JSON.stringify(updated));
-    toast.success("Réservation validée", {
-      description: `La réservation de ${reservation.userName} a été validée.`,
-    });
-    setSelectedReservation(null);
+    try {
+      console.log("✅ Validation de la réservation:", reservation.id);
+      
+      const updated = await reservationService.updateReservation(
+        reservation.id,
+        {
+          status: "validated",
+          validatedBy: currentUser?.name,
+        }
+      );
+
+      if (updated) {
+        toast.success("Réservation validée", {
+          description: `La réservation de ${reservation.userName} a été validée.`,
+        });
+        setSelectedReservation(null);
+      } else {
+        toast.error("Erreur lors de la validation");
+      }
+    } catch (error) {
+      console.error("❌ Erreur lors de la validation:", error);
+      toast.error("Erreur lors de la validation");
+    }
   };
 
   const handleCancelClick = (reservation: Reservation) => {
@@ -99,7 +127,7 @@ export function ReservationsPage() {
     setShowCancelDialog(true);
   };
 
-  const handleCancelConfirm = () => {
+  const handleCancelConfirm = async () => {
     if (!cancelReason.trim()) {
       toast.error("Erreur", {
         description: "Veuillez indiquer la raison de l'annulation",
@@ -108,21 +136,29 @@ export function ReservationsPage() {
     }
 
     if (selectedReservation) {
-      const updated = reservations.map((res) =>
-        res.id === selectedReservation.id
-          ? {
-              ...res,
-              status: "cancelled" as const,
-              cancelReason,
-              cancelledBy: currentUser?.name,
-            }
-          : res
-      );
-      setReservations(updated);
-      localStorage.setItem("reservations", JSON.stringify(updated));
-      toast.success("Réservation annulée", {
-        description: `La réservation de ${selectedReservation.userName} a été annulée.`,
-      });
+      try {
+        console.log("❌ Annulation de la réservation:", selectedReservation.id);
+        
+        const updated = await reservationService.updateReservation(
+          selectedReservation.id,
+          {
+            status: "cancelled",
+            cancelReason,
+            cancelledBy: currentUser?.name,
+          }
+        );
+
+        if (updated) {
+          toast.success("Réservation annulée", {
+            description: `La réservation de ${selectedReservation.userName} a été annulée.`,
+          });
+        } else {
+          toast.error("Erreur lors de l'annulation");
+        }
+      } catch (error) {
+        console.error("❌ Erreur lors de l'annulation:", error);
+        toast.error("Erreur lors de l'annulation");
+      }
     }
 
     setShowCancelDialog(false);
@@ -130,7 +166,7 @@ export function ReservationsPage() {
     setSelectedReservation(null);
   };
 
-  const handleComplete = (reservation: Reservation) => {
+  const handleComplete = async (reservation: Reservation) => {
     // Vérifier que l'utilisateur est un contrôleur
     if (currentUser?.role !== "controller") {
       toast.error("Accès refusé", {
@@ -139,16 +175,28 @@ export function ReservationsPage() {
       return;
     }
     
-    const updated = reservations.map((res) =>
-      res.id === reservation.id
-        ? { ...res, status: "completed" as const, completedBy: currentUser?.name }
-        : res
-    );
-    setReservations(updated);
-    localStorage.setItem("reservations", JSON.stringify(updated));
-    toast.success("Réservation terminée", {
-      description: `La course de ${reservation.userName} a été marquée comme terminée.`,
-    });
+    try {
+      console.log("✅ Marquage de la réservation comme terminée:", reservation.id);
+      
+      const updated = await reservationService.updateReservation(
+        reservation.id,
+        {
+          status: "completed",
+          completedBy: currentUser?.name,
+        }
+      );
+
+      if (updated) {
+        toast.success("Réservation terminée", {
+          description: `La course de ${reservation.userName} a été marquée comme terminée.`,
+        });
+      } else {
+        toast.error("Erreur lors du marquage");
+      }
+    } catch (error) {
+      console.error("❌ Erreur lors du marquage:", error);
+      toast.error("Erreur lors du marquage");
+    }
   };
 
   const getStatusBadge = (status: Reservation["status"]) => {

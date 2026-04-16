@@ -8,6 +8,7 @@ import { Send, Users, User as UserIcon } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { toast } from "sonner@2.0.3";
 import { cn } from "./ui/utils";
+import { chatService } from "../services/chatService";
 
 interface Message {
   id: string;
@@ -36,13 +37,14 @@ export function Chat() {
   const [selectedConversation, setSelectedConversation] = useState<string>("general");
   const [selectedUser, setSelectedUser] = useState<UserAccount | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
   
   // Auto-scroll vers le bas
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Charger les utilisateurs connectés depuis localStorage
+  // Charger les utilisateurs connectés
   useEffect(() => {
     loadOnlineUsers();
     const interval = setInterval(loadOnlineUsers, 2000);
@@ -56,33 +58,61 @@ export function Chat() {
     setOnlineUsers(others);
   };
 
-  // Charger les messages depuis localStorage
+  // Charger les messages et configurer Realtime
   useEffect(() => {
-    loadMessages();
-    const interval = setInterval(loadMessages, 2000);
-    return () => clearInterval(interval);
-  }, []);
+    if (!selectedConversation) return;
 
-  const loadMessages = () => {
-    const stored = localStorage.getItem("chat_messages");
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        const messagesWithDates = parsed.map((msg: any) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp),
-        }));
-        setMessages(messagesWithDates);
-      } catch (error) {
-        console.error("Error loading messages:", error);
-      }
+    // Cleanup de l'ancienne subscription
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
     }
-  };
 
-  const saveMessages = (newMessages: Message[]) => {
-    localStorage.setItem("chat_messages", JSON.stringify(newMessages));
-    setMessages(newMessages);
-  };
+    const initializeMessages = async () => {
+      try {
+        console.log(`📥 Initialisation de la conversation: ${selectedConversation}`);
+        
+        // Charger les messages existants
+        const loaded = await chatService.loadMessages(selectedConversation);
+        setMessages(loaded);
+
+        // S'abonner aux nouveaux messages
+        const unsubscribe = chatService.subscribeToConversation(
+          selectedConversation,
+          (newMessage) => {
+            console.log("📬 Nouveau message ajouté au state");
+            setMessages((prev) => {
+              // Vérifier que le message n'existe pas déjà
+              if (prev.some((m) => m.id === newMessage.id)) {
+                return prev;
+              }
+              return [...prev, newMessage];
+            });
+          },
+          (deletedMessageId) => {
+            console.log("🗑️ Message supprimé du state");
+            setMessages((prev) =>
+              prev.filter((m) => m.id !== deletedMessageId)
+            );
+          }
+        );
+
+        unsubscribeRef.current = unsubscribe;
+      } catch (error) {
+        console.error("❌ Erreur lors de l'initialisation des messages:", error);
+        toast.error("Erreur lors du chargement des messages");
+      }
+    };
+
+    initializeMessages();
+
+    // Cleanup
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+    };
+  }, [selectedConversation]);
 
   useEffect(() => {
     scrollToBottom();
@@ -107,7 +137,7 @@ export function Chat() {
   });
 
   // Envoyer un message
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!messageInput.trim() || !currentUser) return;
 
     const conversationId = selectedConversation === "general" 
@@ -118,21 +148,26 @@ export function Chat() {
       ? null 
       : selectedUser?.id || null;
 
-    const newMessage: Message = {
-      id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      senderId: currentUser.id,
-      senderName: currentUser.name,
-      senderInitials: currentUser.initials,
-      receiverId,
-      text: messageInput,
-      timestamp: new Date(),
-      conversationId,
-    };
+    try {
+      const sentMessage = await chatService.sendMessage(
+        currentUser.id,
+        currentUser.name,
+        currentUser.initials,
+        messageInput,
+        conversationId,
+        receiverId || undefined
+      );
 
-    const updatedMessages = [...messages, newMessage];
-    saveMessages(updatedMessages);
-    setMessageInput("");
-    toast.success("Message envoyé");
+      if (sentMessage) {
+        setMessageInput("");
+        toast.success("Message envoyé");
+      } else {
+        toast.error("Erreur lors de l'envoi du message");
+      }
+    } catch (error) {
+      console.error("❌ Erreur lors de l'envoi du message:", error);
+      toast.error("Erreur lors de l'envoi du message");
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
