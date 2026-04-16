@@ -10,170 +10,59 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
-import { Users, Shield, UserCheck, UserX, Ban, RefreshCw } from "lucide-react";
+import { Users, Shield, UserCheck, UserX, Ban } from "lucide-react";
 import { User } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 import { toast } from "sonner@2.0.3";
-import { supabase, profilesApi, Profile, UserRole } from "../lib/supabase";
-
-/** Convertit un Profile Supabase en User local */
-function mapProfile(p: Profile): User {
-  return {
-    id:       p.id,
-    email:    p.email,
-    name:     p.name,
-    role:     p.role,
-    initials: p.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2),
-    status:   p.status as User["status"],
-    isOnline: p.is_online,
-    lastSeen: p.last_seen ? new Date(p.last_seen) : new Date(),
-  };
-}
 
 export function AccountManagement() {
   const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const { currentUser } = useAuth();
 
-  // ── Chargement initial ──────────────────────────────────────────────
   useEffect(() => {
     loadUsers();
+    
+    // Polling pour simuler le temps réel
+    const interval = setInterval(loadUsers, 2000);
+    return () => clearInterval(interval);
   }, []);
 
-  const loadUsers = async () => {
-    setIsLoading(true);
-    const { data, error } = await profilesApi.getAll();
-    if (error) {
-      toast.error("Erreur", { description: "Impossible de charger les utilisateurs." });
-    } else {
-      setAllUsers((data ?? []).map(mapProfile));
+  const loadUsers = () => {
+    const stored = localStorage.getItem("allUsers");
+    if (stored) {
+      try {
+        const users = JSON.parse(stored);
+        setAllUsers(users);
+      } catch (error) {
+        console.error("Error loading users:", error);
+      }
     }
-    setIsLoading(false);
   };
 
-  // ── Supabase Realtime Presence — statut en ligne ────────────────────
-  useEffect(() => {
-    if (!currentUser) return;
-
-    const presenceChannel = supabase.channel("online-users", {
-      config: { presence: { key: currentUser.id } },
-    });
-
-    presenceChannel
-      .on("presence", { event: "sync" }, () => {
-        const state = presenceChannel.presenceState<{ user_id: string }>();
-        const onlineIds = new Set(
-          Object.values(state).flat().map((p) => p.user_id)
-        );
-        setAllUsers((prev) =>
-          prev.map((u) => ({ ...u, isOnline: onlineIds.has(u.id) }))
-        );
-      })
-      .subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
-          await presenceChannel.track({ user_id: currentUser.id });
-        }
-      });
-
-    return () => {
-      presenceChannel.untrack();
-      supabase.removeChannel(presenceChannel);
-    };
-  }, [currentUser]);
-
-  // ── Supabase Realtime — changements de profils ──────────────────────
-  useEffect(() => {
-    const channel = supabase
-      .channel("profiles-changes")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "profiles" },
-        (payload) => {
-          if (payload.eventType === "UPDATE") {
-            const updated = mapProfile(payload.new as Profile);
-            setAllUsers((prev) =>
-              prev.map((u) => (u.id === updated.id ? updated : u))
-            );
-          }
-          if (payload.eventType === "INSERT") {
-            setAllUsers((prev) => [...prev, mapProfile(payload.new as Profile)]);
-          }
-          if (payload.eventType === "DELETE") {
-            setAllUsers((prev) =>
-              prev.filter((u) => u.id !== (payload.old as Profile).id)
-            );
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  // ── Changer le statut d'un utilisateur ─────────────────────────────
-  const updateUserStatus = async (userId: string, newStatus: User["status"]) => {
-    const { error } = await supabase
-      .from("profiles")
-      .update({ status: newStatus })
-      .eq("id", userId);
-
-    if (error) {
-      toast.error("Erreur", { description: "Impossible de modifier le statut." });
-      return;
-    }
+  const updateUserStatus = (userId: string, newStatus: User["status"]) => {
+    const updated = allUsers.map((user) =>
+      user.id === userId ? { ...user, status: newStatus } : user
+    );
+    setAllUsers(updated);
+    localStorage.setItem("allUsers", JSON.stringify(updated));
 
     const user = allUsers.find((u) => u.id === userId);
     if (user) {
-      const label =
-        newStatus === "active"
-          ? "activé"
-          : newStatus === "restricted"
-          ? "restreint"
-          : "banni";
+      const statusText = newStatus === "active" ? "activé" : newStatus === "restricted" ? "restreint" : "banni";
       toast.success("Statut modifié", {
-        description: `Le compte de ${user.name} a été ${label}.`,
+        description: `Le compte de ${user.name} a été ${statusText}.`,
       });
     }
   };
 
-  // ── Changer le rôle d'un utilisateur ───────────────────────────────
-  const updateUserRole = async (userId: string, newRole: UserRole) => {
-    const { error } = await profilesApi.setRole(userId, newRole);
-    if (error) {
-      toast.error("Erreur", { description: "Impossible de modifier le rôle." });
-      return;
-    }
-    const user = allUsers.find((u) => u.id === userId);
-    if (user) {
-      toast.success("Rôle modifié", {
-        description: `${user.name} est maintenant ${newRole}.`,
-      });
-    }
-  };
-
-  // ── Badges ──────────────────────────────────────────────────────────
   const getRoleBadge = (role: User["role"]) => {
     switch (role) {
       case "admin":
-        return (
-          <Badge className="bg-purple-500 hover:bg-purple-600">
-            <Shield className="w-3 h-3 mr-1" />Admin
-          </Badge>
-        );
+        return <Badge className="bg-purple-500 hover:bg-purple-600"><Shield className="w-3 h-3 mr-1" />Admin</Badge>;
       case "controller":
-        return (
-          <Badge className="bg-blue-500 hover:bg-blue-600">
-            <UserCheck className="w-3 h-3 mr-1" />Contrôleur
-          </Badge>
-        );
+        return <Badge className="bg-blue-500 hover:bg-blue-600"><UserCheck className="w-3 h-3 mr-1" />Contrôleur</Badge>;
       case "user":
-        return (
-          <Badge variant="secondary">
-            <Users className="w-3 h-3 mr-1" />Utilisateur
-          </Badge>
-        );
+        return <Badge variant="secondary"><Users className="w-3 h-3 mr-1" />Utilisateur</Badge>;
     }
   };
 
@@ -188,25 +77,19 @@ export function AccountManagement() {
     }
   };
 
-  // ── Stats ───────────────────────────────────────────────────────────
-  const onlineUsers     = allUsers.filter((u) => u.isOnline);
+  const onlineUsers = allUsers.filter((u) => u.isOnline);
+  const activeUsers = allUsers.filter((u) => u.status === "active");
   const restrictedUsers = allUsers.filter((u) => u.status === "restricted");
-  const bannedUsers     = allUsers.filter((u) => u.status === "banned");
+  const bannedUsers = allUsers.filter((u) => u.status === "banned");
 
   return (
     <div className="p-6 space-y-6 bg-background min-h-full">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold text-foreground">Gestion des comptes</h1>
-          <p className="text-muted-foreground mt-1">
-            Gérez les utilisateurs et leurs accès — synchronisé en temps réel
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={loadUsers} disabled={isLoading}>
-          <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-          Actualiser
-        </Button>
+      <div>
+        <h1 className="text-3xl font-semibold text-foreground">Gestion des comptes</h1>
+        <p className="text-muted-foreground mt-1">
+          Gérez les utilisateurs et leurs accès à la plateforme
+        </p>
       </div>
 
       {/* Statistiques */}
@@ -269,9 +152,7 @@ export function AccountManagement() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {isLoading ? (
-              <p className="text-center text-muted-foreground py-8">Chargement…</p>
-            ) : allUsers.length === 0 ? (
+            {allUsers.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">
                 Aucun utilisateur enregistré
               </p>
@@ -307,10 +188,7 @@ export function AccountManagement() {
                           {getRoleBadge(user.role)}
                           {getStatusBadge(user.status)}
                           {user.isOnline && (
-                            <Badge
-                              variant="outline"
-                              className="bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 text-xs"
-                            >
+                            <Badge variant="outline" className="bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 text-xs">
                               En ligne
                             </Badge>
                           )}
@@ -320,39 +198,6 @@ export function AccountManagement() {
 
                     {user.id !== currentUser?.id && (
                       <div className="flex items-center gap-2">
-                        {/* Changer le rôle */}
-                        <Select
-                          value={user.role}
-                          onValueChange={(value) =>
-                            updateUserRole(user.id, value as UserRole)
-                          }
-                        >
-                          <SelectTrigger className="w-[140px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="user">
-                              <div className="flex items-center gap-2">
-                                <Users className="w-4 h-4 text-muted-foreground" />
-                                Utilisateur
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="controller">
-                              <div className="flex items-center gap-2">
-                                <UserCheck className="w-4 h-4 text-blue-500" />
-                                Contrôleur
-                              </div>
-                            </SelectItem>
-                            <SelectItem value="admin">
-                              <div className="flex items-center gap-2">
-                                <Shield className="w-4 h-4 text-purple-500" />
-                                Admin
-                              </div>
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-
-                        {/* Changer le statut */}
                         <Select
                           value={user.status}
                           onValueChange={(value) =>

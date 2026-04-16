@@ -1,298 +1,531 @@
-import { useState } from 'react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { toast } from 'sonner';
-import { CheckSquare, Eye, Calendar, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from "react";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { toast } from "sonner@2.0.3";
+import { CheckSquare, Eye, Calendar, User, PenTool, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from './ui/dialog';
-import { Badge } from './ui/badge';
-import { useAuth } from '../contexts/AuthContext';
-import { useVehicles } from '../hooks/useVehicles';
-import { supabase } from '../lib/supabase';
+} from "./ui/dialog";
+import { Badge } from "./ui/badge";
+import { useAuth } from "../contexts/AuthContext";
+import { SignaturePad } from "./SignaturePad";
 
 interface ChecklistItem {
   element: string;
   categorie: string;
-  status: 'ok' | 'defect' | 'repair' | null;
+  status: "ok" | "defect" | "repair" | null;
   notes?: string;
 }
 
 const CHECKLIST_ITEMS: Omit<ChecklistItem, 'status' | 'notes'>[] = [
-  { element: 'AVERTISSEUR SONORE', categorie: 'Sécurité' },
-  { element: 'LAVE VITRE AV ET AR', categorie: 'Entretien' },
-  { element: 'ESSUIE VITRE AV ET AR', categorie: 'Entretien' },
-  { element: 'CLIMATISATION AV ET AR', categorie: 'Confort' },
-  { element: 'FEUX/CLIGNOTANTS', categorie: 'Éclairage' },
-  { element: 'RADIO', categorie: 'Confort' },
-  { element: 'CLEFS', categorie: 'Accessoire' },
-  { element: "NIVEAU D'HUILE", categorie: 'Mécanique' },
-  { element: 'VITRE ET PARE BRISE', categorie: 'Accessoire' },
-  { element: 'ROUE DE SECOURS', categorie: 'Outils' },
-  { element: 'CRIC', categorie: 'Outils' },
-  { element: 'CLEFS DE ROUES', categorie: 'Sécurité' },
-  { element: 'TRIANGLE', categorie: 'Sécurité' },
-  { element: 'EXTINCTEUR', categorie: 'Outils' },
-  { element: 'TROUSSE A OUTILS', categorie: 'Hygiénique' },
-  { element: 'TAPIS DE SOL', categorie: 'Sécurité' },
-  { element: 'BOITE A PHARMACIE', categorie: 'Accessoire' },
+  { element: "AVERTISSEUR SONORE", categorie: "Sécurité" },
+  { element: "LAVE VITRE AV ET AR", categorie: "Entretien" },
+  { element: "ESSUIE VITRE AV ES AR", categorie: "Entretien" },
+  { element: "CLIMATISATION AV ET AR", categorie: "Confort" },
+  { element: "FEUX/CLIGNOTANTS", categorie: "Éclairage" },
+  { element: "RADIO", categorie: "Confort" },
+  { element: "CLEFS", categorie: "Accessoire" },
+  { element: "NIVEAU D'HUILE", categorie: "Mécanique" },
+  { element: "VITRE ET PARE BRISE", categorie: "Accessoire" },
+  { element: "ROUE DE SECOURS", categorie: "Outils" },
+  { element: "CRIC", categorie: "Outils" },
+  { element: "CLEFS DE ROUES", categorie: "Sécurité" },
+  { element: "TRIANGLE", categorie: "Sécurité" },
+  { element: "EXTINCTEUR", categorie: "Outils" },
+  { element: "TROUSSE A OUTILS", categorie: "Hygiénique" },
+  { element: "TAPIS DE SOL", categorie: "Sécurité" },
+  { element: "BOITE A PHARMACIE", categorie: "Accessoire" },
+  { element: "ANTENNE", categorie: "Accessoire" },
+  { element: "CARNET D'ENTRETIEN", categorie: "Document" },
+  { element: "CARNET DE BORD", categorie: "Document" },
 ];
 
-const initialItems = (): ChecklistItem[] =>
-  CHECKLIST_ITEMS.map((item) => ({ ...item, status: null, notes: '' }));
+interface SavedChecklist {
+  id: string;
+  vehicleId: string;
+  vehicleName: string;
+  inspectorName: string;
+  date: Date;
+  items: any[];
+  globalNotes?: string;
+  signature?: string;
+}
 
 export function VehicleChecklist() {
   const { currentUser } = useAuth();
-  // ✅ Véhicules depuis Supabase — plus de liste hardcodée
-  const { vehicles, loading: vehiclesLoading } = useVehicles();
+  const [vehicleId, setVehicleId] = useState("");
+  const [vehicleName, setVehicleName] = useState("");
+  const [inspectorName, setInspectorName] = useState(currentUser?.name || "");
+  const [globalNotes, setGlobalNotes] = useState("");
+  const [signature, setSignature] = useState<string | null>(null);
+  
+  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>(
+    CHECKLIST_ITEMS.map(item => ({ ...item, status: null, notes: "" }))
+  );
 
-  const [selectedVehicleId, setSelectedVehicleId] = useState('');
-  const [checklistType, setChecklistType]         = useState<'departure' | 'return'>('departure');
-  const [fuelLevel, setFuelLevel]                 = useState('');
-  const [mileage, setMileage]                     = useState('');
-  const [items, setItems]                         = useState<ChecklistItem[]>(initialItems());
-  const [viewDialogOpen, setViewDialogOpen]       = useState(false);
-  const [saving, setSaving]                       = useState(false);
+  const [savedChecklists, setSavedChecklists] = useState<SavedChecklist[]>([]);
+  const [selectedChecklist, setSelectedChecklist] = useState<SavedChecklist | null>(null);
+  const [showDetailDialog, setShowDetailDialog] = useState(false);
 
-  const completedCount = items.filter((i) => i.status !== null).length;
-  const progressPct    = Math.round((completedCount / items.length) * 100);
+  // Liste des véhicules disponibles
+  const vehicles = [
+    { id: "1", name: "Toyota Corolla" },
+    { id: "2", name: "Honda CR-V" },
+    { id: "3", name: "Toyota Hiace" },
+  ];
 
-  const updateItem = (index: number, status: ChecklistItem['status'], notes?: string) => {
-    setItems((prev) => {
-      const next = [...prev];
-      next[index] = { ...next[index], status, notes: notes ?? next[index].notes };
-      return next;
-    });
+  useEffect(() => {
+    loadChecklists();
+  }, []);
+
+  const loadChecklists = () => {
+    const stored = localStorage.getItem("checklists");
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        const checklistsWithDates = parsed.map((checklist: any) => ({
+          ...checklist,
+          date: new Date(checklist.date),
+        }));
+        setSavedChecklists(checklistsWithDates);
+      } catch (error) {
+        console.error("Error loading checklists:", error);
+      }
+    }
   };
 
-  const handleSave = async () => {
-    if (!selectedVehicleId) {
-      toast.error('Veuillez sélectionner un véhicule');
+  const calculateProgress = () => {
+    const checkedItems = checklistItems.filter(item => item.status !== null).length;
+    return Math.round((checkedItems / checklistItems.length) * 100);
+  };
+
+  const handleStatusChange = (index: number, status: "ok" | "defect" | "repair") => {
+    const items = [...checklistItems];
+    items[index] = {
+      ...items[index],
+      status: items[index].status === status ? null : status,
+    };
+    setChecklistItems(items);
+  };
+
+  const handleNotesChange = (index: number, notes: string) => {
+    const items = [...checklistItems];
+    items[index] = {
+      ...items[index],
+      notes,
+    };
+    setChecklistItems(items);
+  };
+
+  const handleReset = () => {
+    if (confirm("Voulez-vous vraiment réinitialiser la fiche ?")) {
+      setVehicleId("");
+      setVehicleName("");
+      setInspectorName(currentUser?.name || "");
+      setGlobalNotes("");
+      setSignature(null);
+      setChecklistItems(CHECKLIST_ITEMS.map(item => ({ ...item, status: null, notes: "" })));
+      toast.success("Fiche réinitialisée");
+    }
+  };
+
+  const handleSave = () => {
+    if (!vehicleId || !inspectorName) {
+      toast.error("Veuillez sélectionner un véhicule et indiquer votre nom");
       return;
     }
-    if (!fuelLevel || !mileage) {
-      toast.error('Veuillez renseigner le niveau de carburant et le kilométrage');
-      return;
-    }
 
-    setSaving(true);
-    try {
-      // ✅ Sauvegarder dans Supabase
-      const { data: checklist, error: chkErr } = await supabase
-        .from('vehicle_checklists')
-        .insert({
-          vehicle_id:  selectedVehicleId,
-          user_id:     currentUser?.id,
-          type:        checklistType,
-          fuel_level:  fuelLevel,
-          mileage:     parseInt(mileage, 10),
-        })
-        .select()
-        .single();
-
-      if (chkErr || !checklist) {
-        toast.error('Erreur lors de la sauvegarde de la checklist');
-        return;
-      }
-
-      // Sauvegarder les éléments de la checklist
-      const checklistItems = items.map((item) => ({
-        checklist_id: checklist.id,
-        label:        item.element,
-        category:     item.categorie,
-        is_checked:   item.status === 'ok',
-        status:       item.status,
-        notes:        item.notes || null,
+    const selectedVehicle = vehicles.find(v => v.id === vehicleId);
+    
+    // Formater les items pour correspondre à la structure attendue par ReportsPage
+    const formattedItems = checklistItems
+      .filter(item => item.status !== null) // Ne sauvegarder que les items vérifiés
+      .map(item => ({
+        element: item.element,
+        categorie: item.categorie,
+        category: item.categorie, // Alias pour compatibilité
+        item: item.element, // Alias pour compatibilité
+        status: item.status,
+        notes: item.notes || "",
       }));
+    
+    const newChecklist: SavedChecklist = {
+      id: `checklist_${Date.now()}`,
+      vehicleId,
+      vehicleName: selectedVehicle?.name || vehicleName,
+      inspectorName,
+      date: new Date(),
+      items: formattedItems,
+      globalNotes,
+      signature: signature || "",
+    };
 
-      const { error: itemsErr } = await supabase
-        .from('checklist_items')
-        .insert(checklistItems);
-
-      if (itemsErr) {
-        toast.error('Checklist enregistrée mais erreur sur les éléments');
-        return;
-      }
-
-      toast.success(
-        `Fiche de ${checklistType === 'departure' ? 'départ' : 'retour'} enregistrée avec succès !`
-      );
-      // Reset
-      setItems(initialItems());
-      setFuelLevel('');
-      setMileage('');
-      setSelectedVehicleId('');
-    } catch (err) {
-      console.error('Checklist save error:', err);
-      toast.error('Une erreur inattendue est survenue');
-    } finally {
-      setSaving(false);
-    }
+    const updatedChecklists = [...savedChecklists, newChecklist];
+    localStorage.setItem("checklists", JSON.stringify(updatedChecklists));
+    setSavedChecklists(updatedChecklists);
+    
+    toast.success("Fiche enregistrée avec succès !");
+    handleReset();
+    loadChecklists();
   };
 
-  const selectedVehicleName =
-    vehicles.find((v) => v.id === selectedVehicleId)?.name ?? 'Aucun véhicule sélectionné';
+  const handleViewChecklist = (checklist: SavedChecklist) => {
+    setSelectedChecklist(checklist);
+    setShowDetailDialog(true);
+  };
+
+  const progress = calculateProgress();
+
+  const signaturePadRef = useRef<SignaturePad>(null);
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Checklist Véhicule</h1>
-        <Button variant="outline" onClick={() => setViewDialogOpen(true)}>
-          <Eye className="w-4 h-4 mr-2" />
-          Voir les fiches
-        </Button>
+    <div className="p-6 space-y-6 bg-background min-h-full">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold flex items-center gap-2">
+          <CheckSquare className="w-8 h-8 text-primary" />
+          Checklist Véhicules
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Contrôle de l'état des véhicules
+        </p>
       </div>
 
-      <Card>
+      {/* Formulaire de checklist */}
+      <Card className="border-2 border-primary/20">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CheckSquare className="w-5 h-5 text-primary" />
-            Nouvelle fiche
-          </CardTitle>
+          <CardTitle>Nouvelle Fiche d'État</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Complétez tous les champs pour enregistrer la fiche
+          </p>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Type départ / retour */}
-          <div className="grid gap-2">
-            <Label>Type de fiche</Label>
-            <div className="flex gap-3">
-              {(['departure', 'return'] as const).map((t) => (
-                <Button
-                  key={t}
-                  variant={checklistType === t ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setChecklistType(t)}
-                >
-                  {t === 'departure' ? '🚀 Départ' : '🏁 Retour'}
-                </Button>
+        <CardContent className="space-y-6">
+          {/* Informations générales */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="vehicle">
+                Véhicule <span className="text-red-500">*</span>
+              </Label>
+              <select
+                id="vehicle"
+                className="w-full px-3 py-2 border border-input rounded-md bg-background"
+                value={vehicleId}
+                onChange={(e) => {
+                  setVehicleId(e.target.value);
+                  const vehicle = vehicles.find(v => v.id === e.target.value);
+                  setVehicleName(vehicle?.name || "");
+                }}
+              >
+                <option value="">Sélectionner un véhicule</option>
+                {vehicles.map((vehicle) => (
+                  <option key={vehicle.id} value={vehicle.id}>
+                    {vehicle.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="inspector">
+                Inspecteur <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="inspector"
+                placeholder="Nom de l'inspecteur"
+                value={inspectorName}
+                onChange={(e) => setInspectorName(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Progression */}
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <Label>Progression</Label>
+              <span className="text-2xl font-bold text-primary">{progress}%</span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-3">
+              <div
+                className="bg-primary h-3 rounded-full transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Liste des items à vérifier */}
+          <div className="space-y-3">
+            <Label>Éléments à vérifier ({checklistItems.length} éléments)</Label>
+            <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+              {checklistItems.map((item, index) => (
+                <Card key={index} className="p-4">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div>
+                        <p className="font-medium">{item.element}</p>
+                        <p className="text-sm text-muted-foreground">{item.categorie}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant={item.status === "ok" ? "default" : "outline"}
+                          className={item.status === "ok" ? "bg-green-500 hover:bg-green-600 text-white" : ""}
+                          onClick={() => handleStatusChange(index, "ok")}
+                        >
+                          OK
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={item.status === "defect" ? "default" : "outline"}
+                          className={item.status === "defect" ? "bg-orange-500 hover:bg-orange-600 text-white" : ""}
+                          onClick={() => handleStatusChange(index, "defect")}
+                        >
+                          Défaut
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={item.status === "repair" ? "default" : "outline"}
+                          className={item.status === "repair" ? "bg-red-500 hover:bg-red-600 text-white" : ""}
+                          onClick={() => handleStatusChange(index, "repair")}
+                        >
+                          À réparer
+                        </Button>
+                      </div>
+                    </div>
+                    {item.status && item.status !== "ok" && (
+                      <Input
+                        placeholder="Notes (optionnel)"
+                        value={item.notes || ""}
+                        onChange={(e) => handleNotesChange(index, e.target.value)}
+                        className="text-sm"
+                      />
+                    )}
+                  </div>
+                </Card>
               ))}
             </div>
           </div>
 
-          {/* Sélection véhicule */}
-          <div className="grid gap-2">
-            <Label htmlFor="vehicle-select">Véhicule</Label>
-            {vehiclesLoading ? (
-              <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <Loader2 className="w-4 h-4 animate-spin" /> Chargement des véhicules…
-              </div>
-            ) : (
-              <select
-                id="vehicle-select"
-                className="border rounded-md px-3 py-2 text-sm bg-background"
-                value={selectedVehicleId}
-                onChange={(e) => setSelectedVehicleId(e.target.value)}
-              >
-                <option value="">-- Sélectionner un véhicule --</option>
-                {vehicles.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name} {v.plate ? `(${v.plate})` : ''}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          {/* Carburant & kilométrage */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="fuel">Niveau carburant</Label>
-              <Input
-                id="fuel"
-                placeholder="ex: 3/4"
-                value={fuelLevel}
-                onChange={(e) => setFuelLevel(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="mileage">Kilométrage</Label>
-              <Input
-                id="mileage"
-                type="number"
-                placeholder="ex: 45200"
-                value={mileage}
-                onChange={(e) => setMileage(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Barre de progression */}
-          <div className="space-y-1">
-            <div className="flex justify-between text-sm">
-              <span>{completedCount}/{items.length} éléments vérifiés</span>
-              <span>{progressPct}%</span>
-            </div>
-            <div className="w-full bg-muted rounded-full h-2">
-              <div
-                className="bg-primary h-2 rounded-full transition-all"
-                style={{ width: `${progressPct}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Éléments de la checklist */}
+          {/* Notes globales */}
           <div className="space-y-2">
-            {items.map((item, idx) => (
-              <div
-                key={item.element}
-                className="flex items-center justify-between p-3 border rounded-lg bg-background"
-              >
-                <div>
-                  <p className="text-sm font-medium">{item.element}</p>
-                  <Badge variant="outline" className="text-xs mt-1">{item.categorie}</Badge>
-                </div>
-                <div className="flex gap-2">
-                  {(['ok', 'defect', 'repair'] as const).map((s) => (
-                    <Button
-                      key={s}
-                      size="sm"
-                      variant={item.status === s ? 'default' : 'outline'}
-                      className={
-                        item.status === s
-                          ? s === 'ok' ? 'bg-green-600' : s === 'defect' ? 'bg-red-600' : 'bg-yellow-600'
-                          : ''
-                      }
-                      onClick={() => updateItem(idx, s)}
-                    >
-                      {s === 'ok' ? 'OK' : s === 'defect' ? 'Défaut' : 'À réparer'}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            ))}
+            <Label htmlFor="global-notes">Notes globales (optionnel)</Label>
+            <textarea
+              id="global-notes"
+              className="w-full px-3 py-2 border border-input rounded-md bg-background min-h-[100px]"
+              placeholder="Ajoutez des notes générales sur l'état du véhicule..."
+              value={globalNotes}
+              onChange={(e) => setGlobalNotes(e.target.value)}
+            />
           </div>
 
-          <Button
-            className="w-full bg-primary hover:bg-primary/90"
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? (
-              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Enregistrement…</>
-            ) : (
-              <><Calendar className="w-4 h-4 mr-2" /> Enregistrer la fiche {checklistType === 'departure' ? 'de départ' : 'de retour'}</>
-            )}
-          </Button>
+          {/* Signature */}
+          <div className="space-y-2">
+            <Label>Signature de l'inspecteur</Label>
+            <SignaturePad ref={signaturePadRef} onSign={(data) => setSignature(data)} />
+          </div>
+
+          {/* Boutons d'action */}
+          <div className="flex gap-4">
+            <Button
+              onClick={handleSave}
+              className="flex-1 bg-primary hover:bg-primary/90"
+            >
+              Enregistrer la fiche
+            </Button>
+            <Button
+              onClick={handleReset}
+              variant="outline"
+              className="flex-1"
+            >
+              Réinitialiser
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Dialog — historique des fiches (lecture depuis Supabase) */}
-      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+      {/* Section des fiches enregistrées */}
+      <Card className="border-2 border-primary/20">
+        <CardHeader>
+          <CardTitle>Fiches Enregistrées</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            {savedChecklists.length} fiche(s) au total
+          </p>
+        </CardHeader>
+        <CardContent>
+          {savedChecklists.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <CheckSquare className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>Aucune fiche enregistrée pour le moment</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {savedChecklists.map((checklist) => {
+                const okCount = checklist.items.filter((i: any) => i.status === "ok").length;
+                const defectCount = checklist.items.filter((i: any) => i.status === "defect").length;
+                const repairCount = checklist.items.filter((i: any) => i.status === "repair").length;
+                
+                return (
+                  <Card
+                    key={checklist.id}
+                    className="cursor-pointer hover:border-primary/50 transition-all"
+                    onClick={() => handleViewChecklist(checklist)}
+                  >
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-semibold">{checklist.vehicleName}</p>
+                          <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                            <User className="w-3 h-3" />
+                            {checklist.inspectorName}
+                          </p>
+                          <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                            <Calendar className="w-3 h-3" />
+                            {new Date(checklist.date).toLocaleDateString('fr-FR', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </p>
+                        </div>
+                        <Button size="sm" variant="ghost">
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                      </div>
+
+                      <div className="flex gap-2 flex-wrap">
+                        <Badge className="bg-green-500 text-white">
+                          {okCount} OK
+                        </Badge>
+                        <Badge className="bg-orange-500 text-white">
+                          {defectCount} Défauts
+                        </Badge>
+                        <Badge className="bg-red-500 text-white">
+                          {repairCount} Réparations
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Dialog de détail d'une fiche */}
+      <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Fiches enregistrées</DialogTitle>
+            <DialogTitle>Détails de la Fiche</DialogTitle>
             <DialogDescription>
-              Historique des checklists pour {selectedVehicleName}
+              {selectedChecklist?.vehicleName} - Inspecteur: {selectedChecklist?.inspectorName}
             </DialogDescription>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Sélectionnez un véhicule puis consultez son historique dans la gestion des véhicules.
-          </p>
+
+          {selectedChecklist && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-4 p-4 bg-muted rounded-lg">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-green-500">
+                    {selectedChecklist.items.filter((i: any) => i.status === "ok").length}
+                  </p>
+                  <p className="text-sm text-muted-foreground">OK</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-orange-500">
+                    {selectedChecklist.items.filter((i: any) => i.status === "defect").length}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Défauts</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-red-500">
+                    {selectedChecklist.items.filter((i: any) => i.status === "repair").length}
+                  </p>
+                  <p className="text-sm text-muted-foreground">À réparer</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Éléments vérifiés :</Label>
+                <div className="space-y-2">
+                  {selectedChecklist.items.map((item: any, index: number) => (
+                    <div
+                      key={index}
+                      className={`p-3 rounded-lg border-l-4 ${
+                        item.status === "ok"
+                          ? "bg-green-50 dark:bg-green-950/20 border-green-500"
+                          : item.status === "defect"
+                          ? "bg-orange-50 dark:bg-orange-950/20 border-orange-500"
+                          : item.status === "repair"
+                          ? "bg-red-50 dark:bg-red-950/20 border-red-500"
+                          : "bg-gray-50 dark:bg-gray-950/20 border-gray-300"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="font-medium text-sm">
+                            {item.categorie || item.category} - {item.element || item.item}
+                          </p>
+                          {item.notes && (
+                            <p className="text-sm text-muted-foreground mt-1">{item.notes}</p>
+                          )}
+                        </div>
+                        <Badge
+                          className={
+                            item.status === "ok"
+                              ? "bg-green-500"
+                              : item.status === "defect"
+                              ? "bg-orange-500"
+                              : item.status === "repair"
+                              ? "bg-red-500"
+                              : "bg-gray-500"
+                          }
+                        >
+                          {item.status === "ok"
+                            ? "OK"
+                            : item.status === "defect"
+                            ? "Défaut"
+                            : item.status === "repair"
+                            ? "À réparer"
+                            : "Non vérifié"}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {selectedChecklist.globalNotes && (
+                <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-900">
+                  <p className="font-medium text-sm text-blue-700 dark:text-blue-400 mb-1">
+                    Notes globales :
+                  </p>
+                  <p className="text-sm text-blue-600 dark:text-blue-300">
+                    {selectedChecklist.globalNotes}
+                  </p>
+                </div>
+              )}
+
+              {selectedChecklist.signature && (
+                <div className="p-4 bg-gray-50 dark:bg-gray-950/20 rounded-lg border border-gray-200 dark:border-gray-900">
+                  <p className="font-medium text-sm text-gray-700 dark:text-gray-400 mb-1">
+                    Signature de l'inspecteur :
+                  </p>
+                  <img
+                    src={selectedChecklist.signature}
+                    alt="Signature de l'inspecteur"
+                    className="w-full h-auto"
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
