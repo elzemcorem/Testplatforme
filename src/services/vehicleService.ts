@@ -14,28 +14,50 @@ export interface Vehicle {
 
 export const vehicleService = {
   /**
-   * 📥 Charger tous les véhicules de l'utilisateur connecté
+   * 📥 Charger tous les véhicules (Supabase → localStorage fallback)
    */
   async loadVehicles(): Promise<Vehicle[]> {
     try {
-      console.log('🚗 Chargement des véhicules...');
+      console.log('🚗 Chargement des véhicules depuis Supabase...');
       
-      // ⚠️ WORKAROUND: RLS policies ont une récursion infinie
-      // Utiliser localStorage pour l'instant
-      console.log('💾 Utilisation de localStorage (RLS policies à corriger)');
-      const localVehicles = this.loadVehiclesFromLocalStorage();
-      
-      if (localVehicles.length > 0) {
-        console.log(`✅ ${localVehicles.length} véhicules chargés depuis localStorage`);
-        return localVehicles;
+      // Essayer de charger depuis Supabase
+      const { data, error } = await supabase
+        .from('vehicles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.warn('⚠️ Erreur Supabase, basculer sur localStorage:', error.message);
+        const localVehicles = this.loadVehiclesFromLocalStorage();
+        if (localVehicles.length > 0) {
+          console.log(`✅ ${localVehicles.length} véhicules chargés depuis localStorage`);
+          return localVehicles;
+        }
+        return [];
       }
 
-      // Si localStorage est vide, retourner un tableau vide
-      console.log('ℹ️ Aucun véhicule en localStorage');
+      if (data && data.length > 0) {
+        console.log(`✅ ${data.length} véhicules chargés depuis Supabase`);
+        // Sauvegarder en cache localStorage
+        const cacheData = data.map((v: any) => ({
+          id: v.id,
+          name: v.name,
+          type: v.type,
+          capacity: v.capacity,
+          fuelType: v.fuel_type,
+          imageData: v.image_data,
+          created_at: v.created_at,
+        }));
+        localStorage.setItem('vehicles', JSON.stringify(cacheData));
+        return data;
+      }
+
+      console.log('ℹ️ Aucun véhicule trouvé');
       return [];
     } catch (error) {
-      console.error('❌ Exception lors du chargement des véhicules:', error);
-      return [];
+      console.error('❌ Exception lors du chargement:', error);
+      // Fallback sur localStorage en cas d'erreur critique
+      return this.loadVehiclesFromLocalStorage();
     }
   },
 
@@ -67,94 +89,129 @@ export const vehicleService = {
   },
 
   /**
-   * ➕ Créer un nouveau véhicule
+   * ➕ Créer un nouveau véhicule (admin only)
    */
   async createVehicle(vehicle: Omit<Vehicle, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<Vehicle | null> {
     try {
       console.log(`📝 Création du véhicule: ${vehicle.name}`);
 
-      // ⚠️ WORKAROUND: RLS policies cassées, utiliser localStorage
-      // Garder le format camelCase pour localStorage (format cohérent)
-      const newVehicleData = {
-        id: Date.now().toString(),
-        name: vehicle.name,
-        type: vehicle.type,
-        capacity: vehicle.capacity,
-        fuelType: vehicle.fuel_type, // Convertir en camelCase pour localStorage
-        imageData: vehicle.image_data, // Convertir en camelCase pour localStorage
-        created_at: new Date().toISOString(),
-      };
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        console.error('❌ Utilisateur non authentifié');
+        return null;
+      }
 
-      // Charger les véhicules existants
-      const stored = localStorage.getItem('vehicles');
-      const vehicles = stored ? JSON.parse(stored) : [];
-      vehicles.push(newVehicleData);
-      
-      // Sauvegarder en localStorage avec format camelCase
-      localStorage.setItem('vehicles', JSON.stringify(vehicles));
-      console.log('✅ Véhicule créé et sauvegardé:', newVehicleData.name);
-      
-      // Retourner au format Supabase pour la compatibilité API
-      return {
-        id: newVehicleData.id,
-        user_id: '',
-        name: newVehicleData.name,
-        type: newVehicleData.type,
-        capacity: newVehicleData.capacity,
-        fuel_type: newVehicleData.fuelType,
-        image_data: newVehicleData.imageData,
-        created_at: newVehicleData.created_at,
-      };
+      // Insérer dans Supabase
+      const { data, error } = await supabase
+        .from('vehicles')
+        .insert([
+          {
+            name: vehicle.name,
+            type: vehicle.type,
+            capacity: vehicle.capacity,
+            fuel_type: vehicle.fuel_type,
+            image_data: vehicle.image_data,
+            user_id: user.id,
+          },
+        ])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Erreur Supabase:', error.message);
+        // Fallback sur localStorage
+        const newVehicleData = {
+          id: Date.now().toString(),
+          name: vehicle.name,
+          type: vehicle.type,
+          capacity: vehicle.capacity,
+          fuelType: vehicle.fuel_type,
+          imageData: vehicle.image_data,
+          created_at: new Date().toISOString(),
+        };
+        const stored = localStorage.getItem('vehicles');
+        const vehicles = stored ? JSON.parse(stored) : [];
+        vehicles.push(newVehicleData);
+        localStorage.setItem('vehicles', JSON.stringify(vehicles));
+        return {
+          id: newVehicleData.id,
+          user_id: user.id,
+          name: newVehicleData.name,
+          type: newVehicleData.type,
+          capacity: newVehicleData.capacity,
+          fuel_type: newVehicleData.fuelType,
+          image_data: newVehicleData.imageData,
+        };
+      }
+
+      console.log('✅ Véhicule créé:', data.name);
+      return data;
     } catch (error: any) {
-      console.error('❌ Exception lors de la création:', error.message || error);
+      console.error('❌ Exception lors de la création:', error.message);
       throw error;
     }
   },
 
   /**
-   * ✏️ Mettre à jour un véhicule
+   * ✏️ Mettre à jour un véhicule (admin only)
    */
   async updateVehicle(id: string, updates: Partial<Vehicle>): Promise<Vehicle | null> {
     try {
       console.log(`✏️ Mise à jour du véhicule: ${id}`);
 
-      // ⚠️ WORKAROUND: RLS policies cassées, utiliser localStorage
-      // Charger depuis localStorage en format camelCase
-      const stored = localStorage.getItem('vehicles');
-      const vehicles = stored ? JSON.parse(stored) : [];
-      const index = vehicles.findIndex((v: any) => v.id === id);
-      
-      if (index === -1) {
-        console.error('❌ Véhicule non trouvé:', id);
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        console.error('❌ Utilisateur non authentifié');
         return null;
       }
 
-      // Mettre à jour en gardant le format camelCase pour localStorage
-      const updatedData = {
-        ...vehicles[index],
-        name: updates.name !== undefined ? updates.name : vehicles[index].name,
-        type: updates.type !== undefined ? updates.type : vehicles[index].type,
-        capacity: updates.capacity !== undefined ? updates.capacity : vehicles[index].capacity,
-        fuelType: updates.fuel_type !== undefined ? updates.fuel_type : vehicles[index].fuelType,
-        imageData: updates.image_data !== undefined ? updates.image_data : vehicles[index].imageData,
-        updated_at: new Date().toISOString(),
-      };
+      // Mettre à jour dans Supabase
+      const { data, error } = await supabase
+        .from('vehicles')
+        .update({
+          name: updates.name,
+          type: updates.type,
+          capacity: updates.capacity,
+          fuel_type: updates.fuel_type,
+          image_data: updates.image_data,
+        })
+        .eq('id', id)
+        .select()
+        .single();
 
-      vehicles[index] = updatedData;
-      localStorage.setItem('vehicles', JSON.stringify(vehicles));
-      console.log('✅ Véhicule mis à jour:', updatedData.name);
-      
-      // Retourner au format Supabase pour la compatibilité API
-      return {
-        id: updatedData.id,
-        user_id: '',
-        name: updatedData.name,
-        type: updatedData.type,
-        capacity: updatedData.capacity,
-        fuel_type: updatedData.fuelType,
-        image_data: updatedData.imageData,
-        updated_at: updatedData.updated_at,
-      };
+      if (error) {
+        console.warn('⚠️ Erreur Supabase, basculer sur localStorage:', error.message);
+        // Fallback sur localStorage
+        const stored = localStorage.getItem('vehicles');
+        const vehicles = stored ? JSON.parse(stored) : [];
+        const index = vehicles.findIndex((v: any) => v.id === id);
+        
+        if (index !== -1) {
+          const updatedData = {
+            ...vehicles[index],
+            name: updates.name !== undefined ? updates.name : vehicles[index].name,
+            type: updates.type !== undefined ? updates.type : vehicles[index].type,
+            capacity: updates.capacity !== undefined ? updates.capacity : vehicles[index].capacity,
+            fuelType: updates.fuel_type !== undefined ? updates.fuel_type : vehicles[index].fuelType,
+            imageData: updates.image_data !== undefined ? updates.image_data : vehicles[index].imageData,
+          };
+          vehicles[index] = updatedData;
+          localStorage.setItem('vehicles', JSON.stringify(vehicles));
+          return {
+            id: updatedData.id,
+            user_id: user.id,
+            name: updatedData.name,
+            type: updatedData.type,
+            capacity: updatedData.capacity,
+            fuel_type: updatedData.fuelType,
+            image_data: updatedData.imageData,
+          };
+        }
+        return null;
+      }
+
+      console.log('✅ Véhicule mis à jour:', data.name);
+      return data;
     } catch (error) {
       console.error('❌ Exception lors de la mise à jour:', error);
       return null;
@@ -162,25 +219,39 @@ export const vehicleService = {
   },
 
   /**
-   * 🗑️ Supprimer un véhicule
+   * 🗑️ Supprimer un véhicule (admin only)
    */
   async deleteVehicle(id: string): Promise<boolean> {
     try {
       console.log(`🗑️ Suppression du véhicule: ${id}`);
 
-      // ⚠️ WORKAROUND: RLS policies cassées, utiliser localStorage
-      const stored = localStorage.getItem('vehicles');
-      const vehicles = stored ? JSON.parse(stored) : [];
-      const filtered = vehicles.filter((v: any) => v.id !== id);
-      
-      if (filtered.length === vehicles.length) {
-        console.error('❌ Véhicule non trouvé:', id);
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        console.error('❌ Utilisateur non authentifié');
         return false;
       }
 
-      localStorage.setItem('vehicles', JSON.stringify(filtered));
+      // Supprimer de Supabase
+      const { error } = await supabase
+        .from('vehicles')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.warn('⚠️ Erreur Supabase, basculer sur localStorage:', error.message);
+        // Fallback sur localStorage
+        const stored = localStorage.getItem('vehicles');
+        const vehicles = stored ? JSON.parse(stored) : [];
+        const filtered = vehicles.filter((v: any) => v.id !== id);
+        
+        if (filtered.length < vehicles.length) {
+          localStorage.setItem('vehicles', JSON.stringify(filtered));
+          return true;
+        }
+        return false;
+      }
+
       console.log('✅ Véhicule supprimé:', id);
-      
       return true;
     } catch (error) {
       console.error('❌ Exception lors de la suppression:', error);
@@ -189,7 +260,7 @@ export const vehicleService = {
   },
 
   /**
-   * 📡 S'abonner aux changements de véhicules en temps réel
+   * 📡 S'abonner aux changements de véhicules en temps réel (TOUS les véhicules)
    */
   subscribeToVehicles(
     onChanged: (vehicle: Vehicle, action: 'created' | 'updated' | 'deleted') => void
@@ -205,15 +276,16 @@ export const vehicleService = {
           return;
         }
 
+        // ✅ SANS filtre user_id = reçoit TOUS les changements de véhicules
         subscription = supabase
-          .channel(`vehicles:${user.id}`)
+          .channel(`vehicles:all`)
           .on(
             'postgres_changes',
             {
               event: '*',
               schema: 'public',
               table: 'vehicles',
-              filter: `user_id=eq.${user.id}`,
+              // PAS de filtre user_id - tous les utilisateurs voient tous les changements
             },
             (payload: any) => {
               if (unsubscribed) return;
@@ -234,9 +306,9 @@ export const vehicleService = {
           )
           .subscribe((status) => {
             if (status === 'SUBSCRIBED') {
-              console.log('✅ Subscription aux véhicules activée');
+              console.log('✅ Subscription Realtime aux véhicules activée');
             } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-              console.warn('⚠️ Subscription aux véhicules fermée:', status);
+              console.warn('⚠️ Subscription fermée:', status);
             }
           });
       } catch (error) {
