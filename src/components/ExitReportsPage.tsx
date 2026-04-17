@@ -22,6 +22,7 @@ interface ExitReport {
   id: string;
   vehicleName: string;
   vehicleId: string;
+  userId: string;
   userName: string;
   userEmail: string;
   departureDate: Date;
@@ -67,6 +68,7 @@ export function ExitReportsPage() {
         id: report.id,
         vehicleName: report.vehicle_name,
         vehicleId: report.vehicle_id,
+        userId: report.user_id,
         userName: report.user_name,
         userEmail: report.user_email,
         departureDate: new Date(report.departure_date),
@@ -409,7 +411,7 @@ export function ExitReportsPage() {
               <SatisfactionTable
                 exitReportId={selectedReport.id}
                 vehicleId={selectedReport.vehicleId}
-                userId={selectedReport.userName}
+                userId={selectedReport.userId}
                 onSave={() => {
                   toast.success("✅ Données sauvegardées avec succès");
                 }}
