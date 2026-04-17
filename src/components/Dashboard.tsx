@@ -1,10 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Badge } from "./ui/badge";
 import { ReservationStats } from "./ReservationStats";
 import { ReservationFilters } from "./ReservationFilters";
 import { VehicleCard } from "./VehicleCard";
 import { ReservationForm } from "./ReservationForm";
 import { useAuth } from "../contexts/AuthContext";
+import { reservationService } from "../services/reservationService";
+import { toast } from "sonner@2.0.3";
 
 export function Dashboard() {
   const [filters, setFilters] = useState({});
@@ -13,42 +15,53 @@ export function Dashboard() {
   const [reservations, setReservations] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const { currentUser } = useAuth();
+  const unsubscribeRef = useRef<(() => void) | null>(null);
 
-  // Charger les réservations pour déterminer la disponibilité
+  // Charger les réservations depuis Realtime et initialiser les véhicules
   useEffect(() => {
-    loadReservations();
-    loadVehicles();
-    const interval = setInterval(() => {
-      loadReservations();
-      loadVehicles();
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadReservations = () => {
-    const stored = localStorage.getItem("reservations");
-    if (stored) {
-      try {
-        setReservations(JSON.parse(stored));
-      } catch (error) {
-        console.error("Error loading reservations:", error);
-      }
-    }
-  };
-
-  const loadVehicles = () => {
-    const stored = localStorage.getItem("vehicles");
-    if (stored) {
-      try {
-        setVehicles(JSON.parse(stored));
-      } catch (error) {
-        console.error("Error loading vehicles:", error);
-        initializeDefaultVehicles();
-      }
-    } else {
+    const initializeDashboard = async () => {
+      // Charger les réservations
+      const loaded = await reservationService.loadReservations();
+      setReservations(loaded);
+      
+      // Initialiser les véhicules par défaut
       initializeDefaultVehicles();
-    }
-  };
+      
+      // S'abonner aux changements en temps réel
+      const unsubscribe = reservationService.subscribeToReservations(
+        (reservation, action) => {
+          console.log(`📝 Réservation ${action}:`, reservation.id);
+          
+          setReservations((prev) => {
+            if (action === "created") {
+              if (prev.some((r) => r.id === reservation.id)) {
+                return prev;
+              }
+              return [reservation, ...prev];
+            } else if (action === "updated") {
+              return prev.map((r) =>
+                r.id === reservation.id ? reservation : r
+              );
+            } else if (action === "deleted") {
+              return prev.filter((r) => r.id !== reservation.id);
+            }
+            return prev;
+          });
+        }
+      );
+      
+      unsubscribeRef.current = unsubscribe;
+    };
+
+    initializeDashboard();
+
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+    };
+  }, []);
 
   const initializeDefaultVehicles = () => {
     const defaultVehicles = [
@@ -91,14 +104,16 @@ export function Dashboard() {
   const handleCloseForm = () => {
     setIsReservationFormOpen(false);
     setSelectedVehicle(null);
-    loadReservations(); // Recharger pour mettre à jour la disponibilité
+    // Les réservations se mettront à jour automatiquement via Realtime
   };
 
-  // Vérifier si un véhicule a une réservation en attente ou validée
+  // Vérifier si un véhicule est disponible (pas de réservation pending ou validated)
   const isVehicleAvailable = (vehicleId: string) => {
-    return !reservations.some(
-      (res) => res.vehicleId === vehicleId && (res.status === "pending" || res.status === "validated")
+    const hasActiveReservation = reservations.some(
+      (res) => res.vehicleId === vehicleId && 
+               (res.status === "pending" || res.status === "validated")
     );
+    return !hasActiveReservation;
   };
 
   return (

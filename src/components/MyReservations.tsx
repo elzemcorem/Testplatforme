@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -7,6 +7,8 @@ import { useAuth } from "../contexts/AuthContext";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { toast } from "sonner@2.0.3";
+import { reservationService } from "../services/reservationService";
+import { Reservation } from "../types";
 import {
   Dialog,
   DialogContent,
@@ -18,111 +20,112 @@ import {
 import { Textarea } from "./ui/textarea";
 import { Label } from "./ui/label";
 
-interface Reservation {
-  id: string;
-  userId: string;
-  userName: string;
-  userEmail: string;
-  vehicleId: string;
-  vehicleName: string;
-  destination: string;
-  purpose: string;
-  needDriver: boolean;
-  startDate: Date;
-  endDate: Date;
-  status: "pending" | "validated" | "cancelled" | "completed";
-  cancelReason?: string;
-  cancelledBy?: string;
-  createdAt?: Date;
-}
-
 export function MyReservations() {
   const { currentUser } = useAuth();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [cancelReason, setCancelReason] = useState("");
+  const unsubscribeRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    loadReservations();
-    const interval = setInterval(loadReservations, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadReservations = () => {
-    const stored = localStorage.getItem("reservations");
-    if (stored) {
+    const initializeMyReservations = async () => {
       try {
-        const parsed = JSON.parse(stored);
-        const reservationsWithDates = parsed.map((res: any) => {
-          // Valider et convertir la date
-          let validStartDate: Date;
-          let validEndDate: Date;
-          try {
-            validStartDate = new Date(res.startDate);
-            validEndDate = new Date(res.endDate);
-            // Vérifier si la date est valide
-            if (isNaN(validStartDate.getTime()) || isNaN(validEndDate.getTime())) {
-              validStartDate = new Date(); // Utiliser la date actuelle si invalide
-              validEndDate = new Date(); // Utiliser la date actuelle si invalide
-            }
-          } catch {
-            validStartDate = new Date(); // Utiliser la date actuelle si erreur
-            validEndDate = new Date(); // Utiliser la date actuelle si erreur
+        console.log("📥 Chargement des réservations de l'utilisateur");
+        console.log(`👤 currentUser:`, currentUser);
+        
+        if (!currentUser?.id) {
+          console.error("❌ currentUser.id not available");
+          return;
+        }
+        
+        // Charger uniquement les réservations de l'utilisateur
+        const loaded = await reservationService.loadUserReservations(currentUser.id);
+        console.log(`✅ ${loaded.length} réservations chargées pour cet utilisateur`);
+        setReservations(loaded);
+
+        // S'abonner à TOUTES les réservations et filtrer localement
+        const unsubscribe = reservationService.subscribeToReservations(
+          (reservation, action) => {
+            console.log(`📝 Réservation ${action}:`, reservation.id);
+
+            setReservations((prev) => {
+              // Filtrer: garder uniquement les réservations de cet utilisateur
+              if (action === "created") {
+                if (reservation.userId !== currentUser.id) {
+                  return prev; // Ignorer si ce n'est pas nos réservations
+                }
+                if (prev.some((r) => r.id === reservation.id)) {
+                  return prev;
+                }
+                return [reservation, ...prev];
+              } else if (action === "updated") {
+                return prev.map((r) =>
+                  r.id === reservation.id ? reservation : r
+                );
+              } else if (action === "deleted") {
+                return prev.filter((r) => r.id !== reservation.id);
+              }
+              return prev;
+            });
           }
-          
-          return {
-            ...res,
-            startDate: validStartDate,
-            endDate: validEndDate,
-          };
-        });
-        // Filtrer uniquement les réservations de l'utilisateur actuel
-        const myReservations = reservationsWithDates.filter(
-          (res: Reservation) => res.userId === currentUser?.id
         );
-        setReservations(myReservations);
+
+        unsubscribeRef.current = unsubscribe;
       } catch (error) {
-        console.error("Error loading reservations:", error);
+        console.error("❌ Erreur lors de l'initialisation des réservations:", error);
+        toast.error("Erreur lors du chargement des réservations");
       }
-    }
-  };
+    };
+
+    initializeMyReservations();
+
+    // Cleanup
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+    };
+  }, [currentUser?.id, currentUser]);
 
   const handleCancelClick = (reservation: Reservation) => {
     setSelectedReservation(reservation);
     setShowCancelDialog(true);
   };
 
-  const handleCancelConfirm = () => {
+  const handleCancelConfirm = async () => {
     if (!cancelReason.trim()) {
       toast.error("Veuillez indiquer la raison de l'annulation");
       return;
     }
 
     if (selectedReservation) {
-      // Charger toutes les réservations
-      const stored = localStorage.getItem("reservations");
-      if (stored) {
-        const allReservations = JSON.parse(stored);
-        const updated = allReservations.map((res: any) =>
-          res.id === selectedReservation.id
-            ? {
-                ...res,
-                status: "cancelled",
-                cancelReason,
-                cancelledBy: currentUser?.name,
-              }
-            : res
+      try {
+        console.log("❌ Annulation de la réservation:", selectedReservation.id);
+        
+        const updated = await reservationService.updateReservation(
+          selectedReservation.id,
+          {
+            status: "cancelled",
+            cancelReason,
+            cancelledBy: currentUser?.name,
+          }
         );
-        localStorage.setItem("reservations", JSON.stringify(updated));
-        toast.success("Réservation annulée avec succès");
-        loadReservations();
+
+        if (updated) {
+          toast.success("Réservation annulée avec succès");
+          setShowCancelDialog(false);
+          setCancelReason("");
+          setSelectedReservation(null);
+        } else {
+          toast.error("Erreur lors de l'annulation");
+        }
+      } catch (error) {
+        console.error("❌ Erreur lors de l'annulation:", error);
+        toast.error("Erreur lors de l'annulation");
       }
     }
-
-    setShowCancelDialog(false);
-    setCancelReason("");
-    setSelectedReservation(null);
   };
 
   const getStatusBadge = (status: string) => {

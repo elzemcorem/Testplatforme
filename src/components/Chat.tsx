@@ -44,6 +44,18 @@ export function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // Initialiser le service au montage
+  useEffect(() => {
+    const init = async () => {
+      try {
+        await chatService.initialize?.();
+      } catch (error) {
+        console.error("Erreur lors de l'initialisation du chat:", error);
+      }
+    };
+    init();
+  }, []);
+
   // Charger les utilisateurs connectés
   useEffect(() => {
     loadOnlineUsers();
@@ -132,7 +144,7 @@ export function Chat() {
     // et que l'utilisateur actuel est soit l'expéditeur soit le destinataire
     return (
       msg.conversationId === selectedConversation &&
-      (msg.senderId === currentUser?.id || msg.receiverId === currentUser?.id)
+      (msg.senderId === currentUser?.email || msg.receiverId === currentUser?.email)
     );
   });
 
@@ -146,11 +158,11 @@ export function Chat() {
     
     const receiverId = selectedConversation === "general" 
       ? null 
-      : selectedUser?.id || null;
+      : selectedUser?.email || null; // Utiliser email, pas id
 
     try {
       const sentMessage = await chatService.sendMessage(
-        currentUser.id,
+        currentUser.email, // Utiliser email au lieu de UUID
         currentUser.name,
         currentUser.initials,
         messageInput,
@@ -178,7 +190,7 @@ export function Chat() {
   };
 
   const selectConversation = (user: UserAccount) => {
-    const convId = getConversationId(currentUser!.id, user.id);
+    const convId = getConversationId(currentUser!.email, user.email); // Utiliser email au lieu de id
     setSelectedConversation(convId);
     setSelectedUser(user);
   };

@@ -33,9 +33,11 @@ export function ReservationsPage() {
     const initializeReservations = async () => {
       try {
         console.log("📥 Chargement des réservations");
+        console.log(`👤 currentUser:`, currentUser);
         
         // Charger les réservations existantes
         const loaded = await reservationService.loadReservations();
+        console.log(`✅ ${loaded.length} réservations chargées`);
         setReservations(loaded);
 
         // S'abonner à tous les changements
@@ -78,11 +80,14 @@ export function ReservationsPage() {
         unsubscribeRef.current = null;
       }
     };
-  }, []);
+  }, [currentUser]); // ← Ajouter currentUser comme dépendance
 
   const handleValidate = async (reservation: Reservation) => {
+    console.log(`🔍 handleValidate called - currentUser.role=${currentUser?.role}`);
+    
     // Vérifier que l'utilisateur est un contrôleur
     if (currentUser?.role !== "controller") {
+      console.error(`❌ Not a controller. Role is: ${currentUser?.role}`);
       toast.error("Accès refusé", {
         description: "Seul un contrôleur peut valider les réservations.",
       });
@@ -212,10 +217,42 @@ export function ReservationsPage() {
     }
   };
 
-  const pendingReservations = reservations.filter((r) => r.status === "pending");
-  const validatedReservations = reservations.filter((r) => r.status === "validated");
-  const cancelledReservations = reservations.filter((r) => r.status === "cancelled");
-  const completedReservations = reservations.filter((r) => r.status === "completed");
+  // Filtrer les réservations selon le rôle de l'utilisateur
+  const getVisibleReservations = () => {
+    if (!currentUser) {
+      console.log("❌ currentUser is null/undefined");
+      return [];
+    }
+    
+    console.log(`📊 Filtering: role=${currentUser.role}, userId=${currentUser.id}`);
+    
+    // Users: voir uniquement leurs propres réservations
+    if (currentUser.role === "user") {
+      const userReservations = reservations.filter((r) => {
+        const match = r.userId === currentUser.id;
+        console.log(`  Checking reservation ${r.id}: userId=${r.userId}, match=${match}`);
+        return match;
+      });
+      console.log(`✅ User sees ${userReservations.length}/${reservations.length} reservations`);
+      return userReservations;
+    }
+    
+    // Controllers: voir toutes les réservations
+    if (currentUser.role === "controller") {
+      console.log(`✅ Controller sees all ${reservations.length} reservations`);
+      return reservations;
+    }
+    
+    // Admins: voir toutes les réservations
+    console.log(`✅ Admin sees all ${reservations.length} reservations`);
+    return reservations;
+  };
+
+  const visibleReservations = getVisibleReservations();
+  const pendingReservations = visibleReservations.filter((r) => r.status === "pending");
+  const validatedReservations = visibleReservations.filter((r) => r.status === "validated");
+  const cancelledReservations = visibleReservations.filter((r) => r.status === "cancelled");
+  const completedReservations = visibleReservations.filter((r) => r.status === "completed");
 
   return (
     <div className="p-6 space-y-6 bg-background min-h-full">
@@ -292,14 +329,18 @@ export function ReservationsPage() {
 
       {/* Liste des réservations */}
       <div className="space-y-4">
-        {reservations.length === 0 ? (
+        {visibleReservations.length === 0 ? (
           <Card className="border-2 border-primary/20">
             <CardContent className="py-12 text-center">
-              <p className="text-muted-foreground">Aucune réservation pour le moment</p>
+              <p className="text-muted-foreground">
+                {currentUser?.role === "user" 
+                  ? "Aucune réservation pour le moment. Réservez un véhicule!"
+                  : "Aucune réservation pour le moment"}
+              </p>
             </CardContent>
           </Card>
         ) : (
-          reservations
+          visibleReservations
             .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
             .map((reservation) => (
               <Card

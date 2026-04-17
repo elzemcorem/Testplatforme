@@ -46,13 +46,26 @@ export function ReservationForm({ isOpen, onClose, vehicleName, vehicleId }: Res
       return;
     }
 
+    // Vérifier que l'utilisateur est loggé avec un UUID valide
+    if (!currentUser?.id || !currentUser?.email) {
+      toast.error("Erreur: Utilisateur non connecté. Veuillez vous reconnecter.");
+      return;
+    }
+
+    // S'assurer que l'ID est un UUID Supabase valide (36+ caractères)
+    if (currentUser.id.length < 36) {
+      console.error("❌ Invalid UUID format:", currentUser.id);
+      toast.error("Erreur: ID utilisateur invalide. Veuillez vous reconnecter.");
+      return;
+    }
+
     // Créer la réservation
     const reservationData: Omit<Reservation, "id" | "createdAt"> = {
       vehicleId,
       vehicleName,
       userName: name,
-      userEmail: currentUser?.email || "unknown@example.com",
-      userId: currentUser?.id || "unknown",
+      userEmail: currentUser.email,
+      userId: currentUser.id,
       destination,
       purpose,
       needDriver: needDriver === "yes",
@@ -63,6 +76,7 @@ export function ReservationForm({ isOpen, onClose, vehicleName, vehicleId }: Res
 
     try {
       console.log("🚀 Submitting reservation for:", vehicleName);
+      console.log("📋 User ID:", currentUser.id, "- Email:", currentUser.email);
       
       const created = await reservationService.createReservation(reservationData);
       

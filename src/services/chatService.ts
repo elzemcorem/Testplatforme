@@ -26,6 +26,7 @@ interface ChatMessageUI {
 class ChatService {
   private supabase;
   private subscriptions: Map<string, RealtimeChannel> = new Map();
+  private conversationToEmailMap = new Map<string, string>(); // Mapper conversation_id -> receiver_email
 
   constructor() {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -37,6 +38,28 @@ class ChatService {
 
     this.supabase = createClient(supabaseUrl, supabaseAnonKey);
     console.log("✅ ChatService initialisé");
+  }
+
+  /**
+   * Initialiser le service (exécuter les migrations nécessaires)
+   */
+  async initialize(): Promise<void> {
+    try {
+      // Essayer de migrer le type de receiver_id en TEXT si ce n'est pas déjà fait
+      const { error } = await (this.supabase as any).rpc("exec_sql", {
+        sql: "ALTER TABLE chat_messages ALTER COLUMN receiver_id TYPE text;",
+      });
+
+      if (error) {
+        console.warn("⚠️ Migration receiver_id non appliquée (probablement déjà en TEXT ou permission denied)");
+        console.warn("📝 Si tu vois une erreur 'invalid input syntax for type uuid', exécute ceci dans Supabase:");
+        console.warn("ALTER TABLE chat_messages ALTER COLUMN receiver_id TYPE text;");
+      } else {
+        console.log("✅ Colonne receiver_id migrée en TEXT");
+      }
+    } catch (error) {
+      console.warn("⚠️ Impossible d'exécuter la migration automatiquement");
+    }
   }
 
   /**
@@ -87,6 +110,18 @@ class ChatService {
         return null;
       }
 
+      // Toujours envoyer receiver_id, même si null (pour éviter erreur NOT NULL)
+      // Pour messages généraux: receiver_id = null string
+      // Pour messages privés: receiver_id = email du destinataire
+      const actualReceiverId = receiverId || null;
+
+      if (receiverId && receiverId.includes("@")) {
+        console.log(`💾 Message privé - receiver: ${receiverId}`);
+        this.conversationToEmailMap.set(conversationId, receiverId);
+      } else {
+        console.log(`💬 Message général`);
+      }
+
       const { data, error } = await this.supabase
         .from("chat_messages")
         .insert([
@@ -94,7 +129,7 @@ class ChatService {
             sender_id: senderId,
             sender_name: senderName,
             sender_initials: senderInitials,
-            receiver_id: receiverId || null,
+            receiver_id: actualReceiverId, // Toujours inclure, même si null
             content: content.trim(),
             conversation_id: conversationId,
             is_deleted: false,
@@ -105,6 +140,22 @@ class ChatService {
         .single();
 
       if (error) {
+        // Si erreur de type UUID, c'est qu'on n'a pas exécuté le SQL
+        if (
+          error.message?.includes("invalid input syntax for type uuid") ||
+          error.message?.includes("type uuid")
+        ) {
+          console.error("❌ ERREUR: La colonne receiver_id doit être de type TEXT");
+          console.error("📝 À EXÉCUTER dans Supabase SQL Editor:");
+          console.error(
+            "ALTER TABLE chat_messages ALTER COLUMN receiver_id TYPE text;"
+          );
+          console.error(
+            "ALTER TABLE chat_messages ALTER COLUMN receiver_id DROP NOT NULL;"
+          );
+          return null;
+        }
+
         console.error("❌ Erreur lors de l'insertion du message:", error);
         return null;
       }
@@ -153,6 +204,7 @@ class ChatService {
     try {
       console.log(`🔄 Abonnement à la conversation: ${conversationId}`);
 
+      const encodedConversationId = encodeURIComponent(conversationId);
       const channel = this.supabase
         .channel(`chat:${conversationId}`)
         .on(
@@ -161,7 +213,7 @@ class ChatService {
             event: "INSERT",
             schema: "public",
             table: "chat_messages",
-            filter: `conversation_id=eq.${conversationId}`,
+            filter: `conversation_id=eq.${encodedConversationId}`,
           },
           (payload) => {
             console.log("📬 Nouveau message reçu via Realtime");
@@ -175,7 +227,7 @@ class ChatService {
             event: "UPDATE",
             schema: "public",
             table: "chat_messages",
-            filter: `conversation_id=eq.${conversationId}`,
+            filter: `conversation_id=eq.${encodedConversationId}`,
           },
           (payload) => {
             const dbMessage = payload.new as ChatMessage;

@@ -18,6 +18,45 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [allAccounts, setAllAccounts] = useState<User[]>([]);
+
+  // Charger tous les utilisateurs autorisés depuis Supabase
+  const loadAllUsers = async () => {
+    try {
+      console.log('🔄 Chargement des utilisateurs depuis Supabase...');
+      
+      const { data, error } = await supabase
+        .from('allowed_users')
+        .select('id, noms, email, role')
+        .order('noms', { ascending: true });
+
+      if (error) {
+        console.error('❌ Erreur lors du chargement des utilisateurs:', error);
+        return;
+      }
+
+      const users = (data || []).map((row: any) => ({
+        id: row.email || '', // Utiliser l'email comme ID pour les conversations
+        email: row.email || '',
+        name: row.noms || getNameFromEmail(row.email || ''),
+        role: row.role || 'user',
+        initials: getInitials(row.noms || ''),
+        status: 'active',
+        isOnline: true,
+        lastSeen: new Date(),
+      }));
+
+      setAllAccounts(users);
+      console.log(`✅ ${users.length} utilisateurs chargés depuis Supabase`);
+    } catch (error) {
+      console.error('❌ Exception lors du chargement des utilisateurs:', error);
+    }
+  };
+
+  // Charger tous les utilisateurs quand l'app démarre ou quand l'utilisateur se connecte
+  useEffect(() => {
+    loadAllUsers();
+  }, [currentUser]);
 
   // Charger l'utilisateur depuis la session Supabase au démarrage
   useEffect(() => {
@@ -81,6 +120,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error("Error loading user:", error);
         localStorage.removeItem('supabase_session');
       } finally {
+        // Charger tous les utilisateurs depuis Supabase
+        await loadAllUsers();
         setIsLoading(false);
       }
     };
@@ -117,81 +158,129 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false;
       }
       
-      console.log('✅ User is authorized, attempting login...');
+      console.log('✅ User is authorized, attempting login with Supabase Auth...');
       
-      // Appeler l'endpoint de signin sur le serveur
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f44f03da/auth/signin`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify({ email, password }),
-        }
-      );
+      // Utiliser signInWithPassword de Supabase Auth
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password: password,
+      });
 
-      const data = await response.json();
+      if (error) {
+        console.error('❌ Login failed:', error.message);
+        
+        // Si le compte n'existe pas, créer le compte UNE SEULE FOIS
+        if (error.message.includes('Email not confirmed') || 
+            error.message.includes('Invalid login credentials') ||
+            error.message.includes('User not found')) {
+          
+          // Vérifier que on n'a pas déjà essayé de créer ce compte
+          const creationAttempted = sessionStorage.getItem(`signup_attempt_${email}`);
+          
+          if (creationAttempted) {
+            console.error('❌ Signup already attempted for this email recently');
+            console.error('💡 Please wait a few minutes or try with a different password');
+            setIsLoading(false);
+            return false;
+          }
+          
+          console.log('📝 Account not found. Creating account automatically...');
+          
+          // Marquer que nous avons tenté la création
+          sessionStorage.setItem(`signup_attempt_${email}`, 'true');
+          
+          const role = await determineUserRole(email);
+          const name = allowedUser.name || getNameFromEmail(email);
+          
+          // Créer le compte - UNE SEULE TENTATIVE
+          const { data: signupData, error: signupError } = await supabase.auth.signUp({
+            email: email.trim().toLowerCase(),
+            password: password,
+            options: {
+              data: {
+                name: name,
+                role: role,
+                initials: getInitials(name),
+              }
+            }
+          });
+          
+          if (signupError) {
+            console.error('❌ Auto-signup failed:', signupError.message);
+            
+            if (signupError.message.includes('rate limit')) {
+              console.error('💡 Too many signup attempts. Please wait 15-30 minutes before trying again');
+            }
+            
+            setIsLoading(false);
+            return false;
+          }
+          
+          if (signupData.user) {
+            console.log('✅ Account created automatically!');
+            
+            // Attendre 1 seconde pour que la BD se mette à jour
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Maintenant se connecter
+            const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+              email: email.trim().toLowerCase(),
+              password: password,
+            });
+            
+            if (loginError) {
+              console.error('❌ Auto-login failed:', loginError.message);
+              setIsLoading(false);
+              return false;
+            }
+            
+            if (loginData.session && loginData.user) {
+              console.log('✅ Login successful after auto-signup!');
+              
+              const role = await determineUserRole(loginData.user.email || email);
+              const user: User = {
+                id: loginData.user.id,
+                email: loginData.user.email || email,
+                name: loginData.user.user_metadata?.name || allowedUser.name || getNameFromEmail(loginData.user.email || email),
+                role: role,
+                initials: loginData.user.user_metadata?.initials || getInitials(loginData.user.user_metadata?.name || allowedUser.name || ''),
+                status: loginData.user.user_metadata?.status || 'active',
+                isOnline: true,
+                lastSeen: new Date(),
+              };
 
-      if (!response.ok || data.error) {
-        console.error('❌ Login failed:', data.error);
-        
-        // Analyser le type d'erreur pour décider de l'action
-        const errorMessage = data.error || '';
-        
-        // Si le serveur indique que l'utilisateur existe avec un mauvais mot de passe
-        if (data.userExists) {
-          console.error('❌ Wrong password for existing account');
-          console.error('💡 Solution: Use a different email or click "Nouveau Départ"');
+              setCurrentUser(user);
+              updateLocalAccounts(user);
+
+              localStorage.setItem('supabase_session', JSON.stringify({
+                access_token: loginData.session.access_token,
+                user: user
+              }));
+
+              setIsLoading(false);
+              return true;
+            }
+          }
+          
+          setIsLoading(false);
           return false;
         }
         
-        // Si l'utilisateur n'existe pas, refuser (ne pas créer automatiquement)
-        if (errorMessage.includes('Email not confirmed') || 
-            errorMessage.includes('User not found') ||
-            errorMessage.includes('not registered')) {
-          console.error('❌ Account not found. Please contact an administrator to be added to allowed_users');
-          return false;
-        }
-        
-        // Si c'est une erreur de credentials invalides (mauvais mot de passe pour compte existant)
-        if (errorMessage.includes('Invalid login credentials')) {
-          console.error('❌ Wrong password for existing account');
-          console.error('💡 Solution: Use a different email or click "Nouveau Départ"');
-          return false;
-        }
-        
-        // Si le compte existe déjà (erreur de signup)
-        if (errorMessage.includes('already been registered')) {
-          console.error('❌ Account exists - please use the correct password');
-          return false;
-        }
-        
+        setIsLoading(false);
         return false;
       }
 
       if (data.session && data.user) {
-        // Log si le compte a été créé automatiquement
-        if (data.accountCreated) {
-          console.log('🎉 Account created automatically!');
-        }
         console.log('✅ Login successful!');
         
-        // Définir la session dans Supabase client
-        await supabase.auth.setSession({
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-        });
-
         // Récupérer le rôle depuis allowed_users
-        const role = await determineUserRole(data.user.email);
+        const role = await determineUserRole(data.user.email || email);
 
         // Créer l'objet User
         const user: User = {
           id: data.user.id,
-          email: data.user.email,
-          name: data.user.user_metadata?.name || allowedUser.name || getNameFromEmail(data.user.email),
+          email: data.user.email || email,
+          name: data.user.user_metadata?.name || allowedUser.name || getNameFromEmail(data.user.email || email),
           role: role,
           initials: data.user.user_metadata?.initials || getInitials(data.user.user_metadata?.name || allowedUser.name || ''),
           status: data.user.user_metadata?.status || 'active',
@@ -237,29 +326,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       console.log('📝 Creating account for:', email, 'with role:', role);
 
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-f44f03da/auth/signup`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify({ email, password, name, role }),
+      // Utiliser signUpWithPassword de Supabase Auth
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password: password,
+        options: {
+          data: {
+            name: name,
+            role: role,
+            initials: getInitials(name),
+          }
         }
-      );
+      });
 
-      const data = await response.json();
-
-      if (!response.ok || data.error) {
-        console.error('❌ Signup failed:', data.error);
+      if (error) {
+        console.error('❌ Signup failed:', error.message);
+        
+        if (error.message.includes('already registered')) {
+          console.error('❌ Account already exists');
+          console.error('💡 Try logging in instead, or use "Nouveau Départ" to reset');
+        }
+        
         return false;
       }
 
-      console.log('✅ Account created successfully! Now logging in...');
-      
-      // Se connecter automatiquement après l'inscription
-      return await login(email, password);
+      if (data.user) {
+        console.log('✅ Account created successfully!');
+        
+        // Se connecter automatiquement après l'inscription
+        return await login(email, password);
+      }
+
+      return false;
     } catch (error) {
       console.error("❌ Signup error:", error);
       return false;
@@ -305,7 +403,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const getAllAccounts = (): User[] => {
-    return JSON.parse(localStorage.getItem('all_accounts') || '[]');
+    return allAccounts;
   };
 
   return (
