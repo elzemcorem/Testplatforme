@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -20,6 +20,7 @@ import {
 } from "./ui/select";
 import { Plus, Edit, Trash2, Car, Upload, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner@2.0.3";
+import { vehicleService, Vehicle as VehicleType } from "../services/vehicleService";
 
 interface Vehicle {
   id: string;
@@ -36,6 +37,8 @@ export function VehicleConfiguration() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
   
   // Form states
   const [formData, setFormData] = useState({
@@ -46,53 +49,72 @@ export function VehicleConfiguration() {
     imageData: "",
   });
 
+  // 📥 Charger les véhicules depuis Supabase et s'abonner aux mises à jour
   useEffect(() => {
-    loadVehicles();
-  }, []);
-
-  const loadVehicles = () => {
-    const stored = localStorage.getItem("vehicles");
-    if (stored) {
+    const loadAndSubscribe = async () => {
       try {
-        setVehicles(JSON.parse(stored));
-      } catch (error) {
-        console.error("Error loading vehicles:", error);
-        // Initialiser avec les 3 véhicules par défaut
-        initializeDefaultVehicles();
-      }
-    } else {
-      // Initialiser avec les 3 véhicules par défaut
-      initializeDefaultVehicles();
-    }
-  };
+        // Charger les données initiales
+        const loaded = await vehicleService.loadVehicles();
+        const mappedVehicles: Vehicle[] = loaded.map((v: VehicleType) => ({
+          id: v.id,
+          name: v.name,
+          type: v.type,
+          capacity: v.capacity,
+          fuelType: v.fuel_type,
+          imageData: v.image_data,
+        }));
+        setVehicles(mappedVehicles);
+        console.log("✅ Véhicules chargés:", mappedVehicles.length);
 
-  const initializeDefaultVehicles = () => {
-    const defaultVehicles: Vehicle[] = [
-      {
-        id: "1",
-        name: "Toyota Corolla",
-        type: "Berline",
-        capacity: 5,
-        fuelType: "Essence",
-      },
-      {
-        id: "2",
-        name: "Honda CR-V",
-        type: "SUV",
-        capacity: 7,
-        fuelType: "Diesel",
-      },
-      {
-        id: "3",
-        name: "Toyota Hiace",
-        type: "Minibus",
-        capacity: 14,
-        fuelType: "Diesel",
-      },
-    ];
-    setVehicles(defaultVehicles);
-    localStorage.setItem("vehicles", JSON.stringify(defaultVehicles));
-  };
+        // S'abonner aux changements en temps réel
+        const unsubscribe = vehicleService.subscribeToVehicles(
+          (vehicle: VehicleType, action) => {
+            console.log(`📡 Véhicule ${action}:`, vehicle.name);
+            const mappedVehicle: Vehicle = {
+              id: vehicle.id,
+              name: vehicle.name,
+              type: vehicle.type,
+              capacity: vehicle.capacity,
+              fuelType: vehicle.fuel_type,
+              imageData: vehicle.image_data,
+            };
+
+            setVehicles((prev) => {
+              if (action === "created") {
+                if (prev.some((v) => v.id === vehicle.id)) {
+                  return prev;
+                }
+                return [mappedVehicle, ...prev];
+              } else if (action === "updated") {
+                return prev.map((v) =>
+                  v.id === vehicle.id ? mappedVehicle : v
+                );
+              } else if (action === "deleted") {
+                return prev.filter((v) => v.id !== vehicle.id);
+              }
+              return prev;
+            });
+          }
+        );
+
+        unsubscribeRef.current = unsubscribe;
+      } catch (error) {
+        console.error("❌ Erreur lors du chargement:", error);
+        toast.error("Erreur lors du chargement des véhicules");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadAndSubscribe();
+
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+    };
+  }, []);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -118,31 +140,44 @@ export function VehicleConfiguration() {
     }
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!formData.name || !formData.type || !formData.capacity || !formData.fuelType) {
       toast.error("Veuillez remplir tous les champs");
       return;
     }
 
-    const newVehicle: Vehicle = {
-      id: Date.now().toString(),
-      name: formData.name,
-      type: formData.type,
-      capacity: parseInt(formData.capacity),
-      fuelType: formData.fuelType,
-      imageData: formData.imageData || undefined,
-    };
+    try {
+      const created = await vehicleService.createVehicle({
+        name: formData.name,
+        type: formData.type,
+        capacity: parseInt(formData.capacity),
+        fuel_type: formData.fuelType,
+        image_data: formData.imageData || undefined,
+      });
 
-    const updated = [...vehicles, newVehicle];
-    setVehicles(updated);
-    localStorage.setItem("vehicles", JSON.stringify(updated));
-    
-    toast.success(`Véhicule "${formData.name}" ajouté avec succès`);
-    setIsAddDialogOpen(false);
-    resetForm();
+      if (created) {
+        // Ajouter à l'état directement
+        const newVehicle: Vehicle = {
+          id: created.id,
+          name: created.name,
+          type: created.type,
+          capacity: created.capacity,
+          fuelType: created.fuel_type,
+          imageData: created.image_data,
+        };
+        setVehicles((prev) => [newVehicle, ...prev]);
+
+        toast.success(`Véhicule "${formData.name}" ajouté avec succès`);
+        setIsAddDialogOpen(false);
+        resetForm();
+      }
+    } catch (error) {
+      console.error("Erreur lors de l'ajout:", error);
+      toast.error("Erreur lors de l'ajout du véhicule");
+    }
   };
 
-  const handleEdit = () => {
+  const handleEdit = async () => {
     if (!selectedVehicle) return;
 
     if (!formData.name || !formData.type || !formData.capacity || !formData.fuelType) {
@@ -150,34 +185,56 @@ export function VehicleConfiguration() {
       return;
     }
 
-    const updated = vehicles.map((v) =>
-      v.id === selectedVehicle.id
-        ? {
-            ...v,
-            name: formData.name,
-            type: formData.type,
-            capacity: parseInt(formData.capacity),
-            fuelType: formData.fuelType,
-            imageData: formData.imageData || v.imageData,
-          }
-        : v
-    );
+    try {
+      const updated = await vehicleService.updateVehicle(selectedVehicle.id, {
+        name: formData.name,
+        type: formData.type,
+        capacity: parseInt(formData.capacity),
+        fuel_type: formData.fuelType,
+        image_data: formData.imageData || selectedVehicle.imageData,
+      });
 
-    setVehicles(updated);
-    localStorage.setItem("vehicles", JSON.stringify(updated));
-    
-    toast.success(`Véhicule "${formData.name}" modifié avec succès`);
-    setIsEditDialogOpen(false);
-    setSelectedVehicle(null);
-    resetForm();
+      if (updated) {
+        // Mettre à jour l'état directement
+        setVehicles((prev) =>
+          prev.map((v) =>
+            v.id === selectedVehicle.id
+              ? {
+                  ...v,
+                  name: formData.name,
+                  type: formData.type,
+                  capacity: parseInt(formData.capacity),
+                  fuelType: formData.fuelType,
+                  imageData: formData.imageData || selectedVehicle.imageData,
+                }
+              : v
+          )
+        );
+        
+        toast.success(`Véhicule "${formData.name}" modifié avec succès`);
+        setIsEditDialogOpen(false);
+        setSelectedVehicle(null);
+        resetForm();
+      }
+    } catch (error) {
+      console.error("Erreur lors de la modification:", error);
+      toast.error("Erreur lors de la modification du véhicule");
+    }
   };
 
-  const handleDelete = (vehicle: Vehicle) => {
+  const handleDelete = async (vehicle: Vehicle) => {
     if (confirm(`Êtes-vous sûr de vouloir supprimer "${vehicle.name}" ?`)) {
-      const updated = vehicles.filter((v) => v.id !== vehicle.id);
-      setVehicles(updated);
-      localStorage.setItem("vehicles", JSON.stringify(updated));
-      toast.success(`Véhicule "${vehicle.name}" supprimé avec succès`);
+      try {
+        const deleted = await vehicleService.deleteVehicle(vehicle.id);
+        if (deleted) {
+          // Retirer de l'état directement
+          setVehicles((prev) => prev.filter((v) => v.id !== vehicle.id));
+          toast.success(`Véhicule "${vehicle.name}" supprimé avec succès`);
+        }
+      } catch (error) {
+        console.error("Erreur lors de la suppression:", error);
+        toast.error("Erreur lors de la suppression du véhicule");
+      }
     }
   };
 

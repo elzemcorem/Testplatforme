@@ -6,6 +6,7 @@ import { VehicleCard } from "./VehicleCard";
 import { ReservationForm } from "./ReservationForm";
 import { useAuth } from "../contexts/AuthContext";
 import { reservationService } from "../services/reservationService";
+import { vehicleService, Vehicle as VehicleType } from "../services/vehicleService";
 import { toast } from "sonner@2.0.3";
 
 export function Dashboard() {
@@ -15,98 +16,107 @@ export function Dashboard() {
   const [reservations, setReservations] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const { currentUser } = useAuth();
-  const unsubscribeRef = useRef<(() => void) | null>(null);
+  const unsubscribeReservationsRef = useRef<(() => void) | null>(null);
+  const unsubscribeVehiclesRef = useRef<(() => void) | null>(null);
 
-  // Charger les réservations depuis Realtime et initialiser les véhicules
+  // 📥 Charger les réservations et véhicules depuis Supabase en temps réel
   useEffect(() => {
     const initializeDashboard = async () => {
-      // Charger les réservations
-      const loaded = await reservationService.loadReservations();
-      setReservations(loaded);
-      
-      // Initialiser les véhicules par défaut
-      initializeDefaultVehicles();
-      
-      // S'abonner aux changements en temps réel
-      const unsubscribe = reservationService.subscribeToReservations(
-        (reservation, action) => {
-          console.log(`📝 Réservation ${action}:`, reservation.id);
-          
-          setReservations((prev) => {
-            if (action === "created") {
-              if (prev.some((r) => r.id === reservation.id)) {
-                return prev;
+      try {
+        // Charger les réservations
+        const loadedReservations = await reservationService.loadReservations();
+        setReservations(loadedReservations);
+        console.log("✅ Réservations chargées");
+
+        // Charger les véhicules
+        const loadedVehicles = await vehicleService.loadVehicles();
+        const mappedVehicles = loadedVehicles.map((v: VehicleType) => ({
+          id: v.id,
+          name: v.name,
+          type: v.type,
+          capacity: v.capacity,
+          fuelType: v.fuel_type,
+          imageData: v.image_data,
+        }));
+        setVehicles(mappedVehicles);
+        console.log("✅ Véhicules chargés:", mappedVehicles.length);
+
+        // S'abonner aux changements de réservations
+        const unsubscribeReservations = reservationService.subscribeToReservations(
+          (reservation, action) => {
+            console.log(`📡 Réservation ${action}:`, reservation.id);
+            
+            setReservations((prev) => {
+              if (action === "created") {
+                if (prev.some((r) => r.id === reservation.id)) {
+                  return prev;
+                }
+                return [reservation, ...prev];
+              } else if (action === "updated") {
+                return prev.map((r) =>
+                  r.id === reservation.id ? reservation : r
+                );
+              } else if (action === "deleted") {
+                return prev.filter((r) => r.id !== reservation.id);
               }
-              return [reservation, ...prev];
-            } else if (action === "updated") {
-              return prev.map((r) =>
-                r.id === reservation.id ? reservation : r
-              );
-            } else if (action === "deleted") {
-              return prev.filter((r) => r.id !== reservation.id);
-            }
-            return prev;
-          });
-        }
-      );
-      
-      unsubscribeRef.current = unsubscribe;
+              return prev;
+            });
+          }
+        );
+
+        unsubscribeReservationsRef.current = unsubscribeReservations;
+
+        // S'abonner aux changements de véhicules
+        const unsubscribeVehicles = vehicleService.subscribeToVehicles(
+          (vehicle: VehicleType, action) => {
+            console.log(`📡 Véhicule ${action}:`, vehicle.name);
+            const mappedVehicle = {
+              id: vehicle.id,
+              name: vehicle.name,
+              type: vehicle.type,
+              capacity: vehicle.capacity,
+              fuelType: vehicle.fuel_type,
+              imageData: vehicle.image_data,
+            };
+
+            setVehicles((prev) => {
+              if (action === "created") {
+                if (prev.some((v: any) => v.id === vehicle.id)) {
+                  return prev;
+                }
+                return [mappedVehicle, ...prev];
+              } else if (action === "updated") {
+                return prev.map((v: any) =>
+                  v.id === vehicle.id ? mappedVehicle : v
+                );
+              } else if (action === "deleted") {
+                return prev.filter((v: any) => v.id !== vehicle.id);
+              }
+              return prev;
+            });
+          }
+        );
+
+        unsubscribeVehiclesRef.current = unsubscribeVehicles;
+      } catch (error) {
+        console.error("❌ Erreur lors de l'initialisation:", error);
+        toast.error("Erreur lors du chargement des données");
+      }
     };
 
     initializeDashboard();
 
     return () => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current();
-        unsubscribeRef.current = null;
+      if (unsubscribeReservationsRef.current) {
+        unsubscribeReservationsRef.current();
+        unsubscribeReservationsRef.current = null;
+      }
+      if (unsubscribeVehiclesRef.current) {
+        unsubscribeVehiclesRef.current();
+        unsubscribeVehiclesRef.current = null;
       }
     };
   }, []);
-
-  const initializeDefaultVehicles = () => {
-    // 1️⃣ Charger d'abord les véhicules depuis localStorage
-    const savedVehicles = localStorage.getItem("vehicles");
-    if (savedVehicles) {
-      try {
-        const parsedVehicles = JSON.parse(savedVehicles);
-        if (Array.isArray(parsedVehicles) && parsedVehicles.length > 0) {
-          console.log("✅ Véhicules modifiés chargés depuis localStorage:", parsedVehicles);
-          setVehicles(parsedVehicles);
-          return;
-        }
-      } catch (error) {
-        console.error("❌ Erreur lors du chargement des véhicules:", error);
-      }
-    }
-
-    // 2️⃣ Si aucun véhicule sauvegardé, utiliser les defaults
-    const defaultVehicles = [
-      {
-        id: "1",
-        name: "Toyota Corolla",
-        type: "Berline",
-        capacity: 5,
-        fuelType: "Essence",
-      },
-      {
-        id: "2",
-        name: "Honda CR-V",
-        type: "SUV",
-        capacity: 7,
-        fuelType: "Diesel",
-      },
-      {
-        id: "3",
-        name: "Toyota Hiace",
-        type: "Minibus",
-        capacity: 14,
-        fuelType: "Diesel",
-      },
-    ];
-    console.log("📝 Utilisation des véhicules par défaut");
-    setVehicles(defaultVehicles);
-    localStorage.setItem("vehicles", JSON.stringify(defaultVehicles));
-  };
 
   const handleFilterChange = (newFilters: any) => {
     setFilters(newFilters);
@@ -150,7 +160,7 @@ export function Dashboard() {
             <div className="flex items-center gap-2">
               <Badge className="bg-primary/10 text-primary border-primary/20 px-3 py-1.5">
                 <div className="w-2 h-2 bg-primary rounded-full mr-2 animate-pulse"></div>
-                {vehicles.filter(v => v.available).length} véhicules disponibles
+                {vehicles.length} véhicule(s)
               </Badge>
             </div>
           </div>
@@ -172,17 +182,30 @@ export function Dashboard() {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {vehicles.map((vehicle) => {
-              const available = isVehicleAvailable(vehicle.id);
-              return (
-                <VehicleCard 
-                  key={vehicle.id} 
-                  {...vehicle} 
-                  available={available}
-                  onReserve={handleReserve} 
-                />
-              );
-            })}
+            {vehicles.length > 0 ? (
+              vehicles.map((vehicle) => {
+                const available = isVehicleAvailable(vehicle.id);
+                return (
+                  <VehicleCard 
+                    key={vehicle.id} 
+                    {...vehicle} 
+                    available={available}
+                    onReserve={handleReserve} 
+                  />
+                );
+              })
+            ) : (
+              <div className="col-span-1 md:col-span-2 lg:col-span-3">
+                <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-8 text-center">
+                  <p className="text-amber-800 dark:text-amber-200 font-medium mb-2">
+                    ℹ️ Aucun véhicule disponible
+                  </p>
+                  <p className="text-amber-700 dark:text-amber-300 text-sm">
+                    Allez à la section <strong>Configuration</strong> pour ajouter des véhicules
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
