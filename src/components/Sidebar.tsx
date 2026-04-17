@@ -395,8 +395,10 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
                     variant="ghost"
                     className="w-full justify-start"
                     onClick={() => {
-                      logout();
-                      setShowAccountMenu(false);
+                      if (window.confirm('Vous allez être déconnecté. Veuillez vous reconnecter avec un autre compte.')) {
+                        logout();
+                        setShowAccountMenu(false);
+                      }
                     }}
                   >
                     <UserPlus className="w-4 h-4 mr-2" />

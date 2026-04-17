@@ -383,22 +383,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const switchAccount = async (userId: string) => {
-    const accounts = JSON.parse(localStorage.getItem('all_accounts') || '[]');
-    const user = accounts.find((acc: User) => acc.id === userId);
+    const email = userId; // userId is actually the email
     
-    if (user) {
-      // Pour changer de compte, on doit se déconnecter et se reconnecter
-      // Ceci est une limitation - pour un vrai switch, il faudrait stocker
-      // les credentials de chaque compte, ce qui n'est pas sécurisé
-      console.log('⚠️ Account switching requires re-login with that account credentials');
+    try {
+      // Demander le mot de passe pour le compte cible
+      const password = window.prompt(`Entrez votre mot de passe pour vous connecter à ${email}:`);
       
-      setCurrentUser(user);
+      if (!password) {
+        console.log('❌ Account switch cancelled - no password provided');
+        return;
+      }
       
-      // Mettre à jour la session locale (mais ce ne sera pas une vraie session Supabase)
-      localStorage.setItem('supabase_session', JSON.stringify({
-        access_token: null,
-        user: user
-      }));
+      // Se déconnecter du compte actuel
+      console.log(`👋 Logging out from ${currentUser?.email}...`);
+      await logout();
+      
+      // Attendre que la déconnexion se propage
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Se connecter au nouveau compte
+      console.log(`🔐 Logging in to ${email}...`);
+      const success = await login(email, password);
+      
+      if (success) {
+        console.log(`✅ Successfully switched to ${email}`);
+      } else {
+        console.error(`❌ Failed to switch to ${email}`);
+        alert('❌ Impossible de se connecter à ce compte. Vérifiez vos identifiants.');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error during account switch:', error);
+      alert('❌ Erreur lors du changement de compte');
     }
   };
 
