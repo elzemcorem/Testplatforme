@@ -64,6 +64,22 @@ export function Dashboard() {
   }, []);
 
   const initializeDefaultVehicles = () => {
+    // 1️⃣ Charger d'abord les véhicules depuis localStorage
+    const savedVehicles = localStorage.getItem("vehicles");
+    if (savedVehicles) {
+      try {
+        const parsedVehicles = JSON.parse(savedVehicles);
+        if (Array.isArray(parsedVehicles) && parsedVehicles.length > 0) {
+          console.log("✅ Véhicules modifiés chargés depuis localStorage:", parsedVehicles);
+          setVehicles(parsedVehicles);
+          return;
+        }
+      } catch (error) {
+        console.error("❌ Erreur lors du chargement des véhicules:", error);
+      }
+    }
+
+    // 2️⃣ Si aucun véhicule sauvegardé, utiliser les defaults
     const defaultVehicles = [
       {
         id: "1",
@@ -87,6 +103,7 @@ export function Dashboard() {
         fuelType: "Diesel",
       },
     ];
+    console.log("📝 Utilisation des véhicules par défaut");
     setVehicles(defaultVehicles);
     localStorage.setItem("vehicles", JSON.stringify(defaultVehicles));
   };
