@@ -221,12 +221,11 @@ export function Dashboard() {
               <div className="col-span-1 md:col-span-2 lg:col-span-3">
                 <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-8 text-center">
                   <p className="text-amber-800 dark:text-amber-200 font-medium mb-2">
+                    ℹ️{" "}
                     {vehicles.length > 0 
                       ? "Aucun véhicule ne correspond à vos critères de filtrage"
                       : "Aucun véhicule disponible"
                     }
-                  </p>
-                    ℹ️ Aucun véhicule disponible
                   </p>
                   <p className="text-amber-700 dark:text-amber-300 text-sm">
                     Allez à la section <strong>Configuration</strong> pour ajouter des véhicules

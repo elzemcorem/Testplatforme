@@ -14,7 +14,8 @@ import {
   ClipboardList,
   Users,
   UserPlus,
-  CheckSquare
+  CheckSquare,
+  ClipboardCheck
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -137,6 +138,12 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
           name: "Rapports",
           icon: FileText,
           description: "Générer des rapports"
+        },
+        {
+          id: "exit-reports",
+          name: "Rapports de Sortie",
+          icon: ClipboardCheck,
+          description: "Rapports de sortie véhicules"
         },
         {
           id: "chat",
