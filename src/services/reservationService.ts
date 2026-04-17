@@ -1,5 +1,6 @@
 import { createClient, RealtimeChannel } from "@supabase/supabase-js";
 import { Reservation } from "../types";
+import { notificationService } from "./notificationService";
 
 interface DBReservation {
   id: string;
@@ -138,7 +139,25 @@ class ReservationService {
       }
 
       console.log("✅ Réservation créée avec succès");
-      return this.mapFromDB(data);
+      const mappedReservation = this.mapFromDB(data);
+
+      // Envoyer une notification au contrôleur
+      try {
+        await notificationService.notifyControllerNewReservation({
+          vehicleName: reservation.vehicleName,
+          userName: reservation.userName,
+          userEmail: reservation.userEmail,
+          destination: reservation.destination,
+          purpose: reservation.purpose,
+          needDriver: reservation.needDriver,
+          startDate: reservation.startDate,
+          endDate: reservation.endDate,
+        });
+      } catch (notificationError) {
+        console.warn('⚠️ La notification n\'a pas pu être envoyée, mais la réservation a été créée:', notificationError);
+      }
+
+      return mappedReservation;
     } catch (error) {
       console.error("❌ Exception lors de la création de la réservation:", error);
       return null;

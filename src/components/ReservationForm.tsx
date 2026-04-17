@@ -84,6 +84,12 @@ export function ReservationForm({ isOpen, onClose, vehicleName, vehicleId }: Res
       return;
     }
 
+    // Validation du permis si pas de chauffeur
+    if (needDriver === "no" && !currentUser?.hasLicense) {
+      toast.error("❌ Vous n'avez pas de permis de conduire. Veuillez sélectionner 'Oui' pour un chauffeur.");
+      return;
+    }
+
     if (endDate < startDate) {
       toast.error("La date de fin doit être après la date de début");
       return;

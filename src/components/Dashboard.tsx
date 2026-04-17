@@ -123,6 +123,29 @@ export function Dashboard() {
     console.log("Filtres appliqués:", newFilters);
   };
 
+  // Filtrer les véhicules selon les critères
+  const filteredVehicles = vehicles.filter((vehicle) => {
+    // Filtre par type de véhicule
+    if (filters.vehicleType && filters.vehicleType !== "all") {
+      if (vehicle.type !== filters.vehicleType) {
+        return false;
+      }
+    }
+
+    // Filtre par statut (disponibilité)
+    if (filters.status && filters.status !== "all") {
+      const isAvailable = isVehicleAvailable(vehicle.id);
+      if (filters.status === "available" && !isAvailable) {
+        return false;
+      }
+      if (filters.status === "reserved" && isAvailable) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+
   const handleReserve = (vehicleId: string, vehicleName: string) => {
     setSelectedVehicle({ id: vehicleId, name: vehicleName });
     setIsReservationFormOpen(true);
@@ -177,13 +200,13 @@ export function Dashboard() {
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">Véhicules disponibles</h2>
             <p className="text-sm text-muted-foreground">
-              {vehicles.length} véhicules au total
+              {filteredVehicles.length} véhicule(s) trouvé(s) sur {vehicles.length}
             </p>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {vehicles.length > 0 ? (
-              vehicles.map((vehicle) => {
+            {filteredVehicles.length > 0 ? (
+              filteredVehicles.map((vehicle) => {
                 const available = isVehicleAvailable(vehicle.id);
                 return (
                   <VehicleCard 
@@ -198,6 +221,11 @@ export function Dashboard() {
               <div className="col-span-1 md:col-span-2 lg:col-span-3">
                 <div className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-8 text-center">
                   <p className="text-amber-800 dark:text-amber-200 font-medium mb-2">
+                    {vehicles.length > 0 
+                      ? "Aucun véhicule ne correspond à vos critères de filtrage"
+                      : "Aucun véhicule disponible"
+                    }
+                  </p>
                     ℹ️ Aucun véhicule disponible
                   </p>
                   <p className="text-amber-700 dark:text-amber-300 text-sm">

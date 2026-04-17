@@ -11,6 +11,7 @@ export interface User {
   status: "active" | "restricted" | "banned";
   isOnline?: boolean;
   lastSeen?: Date;
+  hasLicense?: boolean; // Permis de conduire
 }
 
 export interface Reservation {
