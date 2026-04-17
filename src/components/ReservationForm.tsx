@@ -10,13 +10,49 @@ import {
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { Textarea } from "./ui/textarea";
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { DateTimePicker } from "./DateTimePicker";
 import { toast } from "sonner@2.0.3";
 import { useAuth } from "../contexts/AuthContext";
 import { Reservation } from "../types";
 import { reservationService } from "../services/reservationService";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
+
+// Options prédéfinies pour les destinations (villes du Bénin)
+const BENIN_DESTINATIONS = [
+  "Cotonou",
+  "Porto-Novo",
+  "Calavi",
+  "Abomey",
+  "Parakou",
+  "Bohicon",
+  "Ouidah",
+  "Allada",
+  "Athiémé",
+  "Sakété",
+  "Agbomey",
+  "Ouessé",
+];
+
+// Options prédéfinies pour les objets de réservation
+const RESERVATION_PURPOSES = [
+  "Achat d'articles pétroliers",
+  "Livraison de carburant",
+  "Inspection de site",
+  "Réunion de travail",
+  "Transport de personnel",
+  "Approvisionnement",
+  "Visite d'affaires",
+  "Maintenance",
+  "Sécurité",
+  "Audit",
+];
 
 interface ReservationFormProps {
   isOpen: boolean;
@@ -134,12 +170,18 @@ export function ReservationForm({ isOpen, onClose, vehicleName, vehicleId }: Res
             <Label htmlFor="destination">
               Destination <span className="text-red-500">*</span>
             </Label>
-            <Input
-              id="destination"
-              placeholder="Où allez-vous ?"
-              value={destination}
-              onChange={(e) => setDestination(e.target.value)}
-            />
+            <Select value={destination} onValueChange={setDestination}>
+              <SelectTrigger id="destination" className="w-full">
+                <SelectValue placeholder="Sélectionnez une destination" />
+              </SelectTrigger>
+              <SelectContent>
+                {BENIN_DESTINATIONS.map((city) => (
+                  <SelectItem key={city} value={city}>
+                    {city}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Objet de la réservation */}
@@ -147,13 +189,18 @@ export function ReservationForm({ isOpen, onClose, vehicleName, vehicleId }: Res
             <Label htmlFor="purpose">
               Objet de la réservation <span className="text-red-500">*</span>
             </Label>
-            <Textarea
-              id="purpose"
-              placeholder="Expliquez le but de votre réservation"
-              value={purpose}
-              onChange={(e) => setPurpose(e.target.value)}
-              rows={3}
-            />
+            <Select value={purpose} onValueChange={setPurpose}>
+              <SelectTrigger id="purpose" className="w-full">
+                <SelectValue placeholder="Sélectionnez un objet" />
+              </SelectTrigger>
+              <SelectContent>
+                {RESERVATION_PURPOSES.map((obj) => (
+                  <SelectItem key={obj} value={obj}>
+                    {obj}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Dates */}
