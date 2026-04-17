@@ -116,23 +116,27 @@ export function SatisfactionTable({
 
   const exportToExcel = () => {
     const totals = satisfactionReportService.calculateTotals(data);
+    const dateStr = new Date().toLocaleDateString("fr-FR");
 
-    let csv = "SERVICES,NOMBRE DEMANDES,NOMBRES SATISFAIT,NOMBRE NON SATISFAITS,TAUX SATISFACTION,TAUX NON SATISFACTION\n";
+    // En-tête
+    let csv = "RAPPORT DE SATISFACTION DES SERVICES\n";
+    csv += `Généré le,${dateStr}\n\n`;
+    csv += "SERVICES,NOMBRE DEMANDES,NOMBRES SATISFAIT,NOMBRE NON SATISFAITS,TAUX SATISFACTION (%),TAUX NON SATISFACTION (%)\n";
 
     SERVICES.forEach((service) => {
       const serviceKey = service.toLowerCase() as keyof typeof data;
       const serviceData = data[serviceKey] as any;
       const rates = satisfactionReportService.calculateRates(serviceData);
 
-      csv += `${service},${serviceData.requests},${serviceData.satisfied},${serviceData.unsatisfied},${rates.satisfaction}%,${rates.dissatisfaction}%\n`;
+      csv += `${service},${serviceData.requests},${serviceData.satisfied},${serviceData.unsatisfied},${rates.satisfaction},${rates.dissatisfaction}\n`;
     });
 
     // TOTAL
     const totalRates = satisfactionReportService.calculateRates(totals);
-    csv += `TOTAL,${totals.requests},${totals.satisfied},${totals.unsatisfied},${totalRates.satisfaction}%,${totalRates.dissatisfaction}%\n`;
+    csv += `TOTAL,${totals.requests},${totals.satisfied},${totals.unsatisfied},${totalRates.satisfaction},${totalRates.dissatisfaction}\n`;
 
     if (data.notes) {
-      csv += `\nNOTES,${data.notes}`;
+      csv += `\n\nNOTES ADDITIONNELLES\n"${data.notes}"`;
     }
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -145,46 +149,207 @@ export function SatisfactionTable({
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    toast.success("📊 Export Excel téléchargé");
+    toast.success("📊 Export Excel (CSV) téléchargé");
   };
 
   const exportToPDF = () => {
     const totals = satisfactionReportService.calculateTotals(data);
+    const dateStr = new Date().toLocaleDateString("fr-FR");
+    const timeStr = new Date().toLocaleTimeString("fr-FR");
 
-    let pdfContent = `%PDF-1.4
-1 0 obj
-<< /Type /Catalog /Pages 2 0 R >>
-endobj
-2 0 obj
-<< /Type /Pages /Kids [3 0 R] /Count 1 >>
-endobj
-3 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
-endobj
-4 0 obj
-<< >>
-stream
-BT
-/F1 12 Tf
-50 750 Td
-(RAPPORT DE SATISFACTION) Tj
-0 -20 Td
-(Services) Tj
-ET
-endstream
-endobj
-5 0 obj
-<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
-endobj
-xref
-0 6
-trailer
-<< /Size 6 /Root 1 0 R >>
-startxref
-0
-%%EOF`;
+    let htmlContent = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rapport de Satisfaction - ${dateStr}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: white;
+      color: #333;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+    .header {
+      text-align: center;
+      border-bottom: 3px solid #2563eb;
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+    }
+    .header h1 {
+      color: #1e40af;
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+    .header p {
+      color: #666;
+      font-size: 14px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      font-size: 12px;
+      color: #666;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    th {
+      background: #2563eb;
+      color: white;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      border: 1px solid #1e40af;
+      font-size: 12px;
+    }
+    td {
+      padding: 12px;
+      border: 1px solid #ddd;
+      text-align: center;
+      font-size: 12px;
+    }
+    tr:nth-child(even) {
+      background-color: #f9fafb;
+    }
+    tr:hover {
+      background-color: #f3f4f6;
+    }
+    .total-row {
+      background-color: #eff6ff;
+      font-weight: bold;
+      border-top: 2px solid #2563eb;
+    }
+    .total-row td {
+      background-color: #dbeafe;
+      color: #1e40af;
+    }
+    .satisfaction-high {
+      color: #16a34a;
+      font-weight: 600;
+    }
+    .satisfaction-low {
+      color: #dc2626;
+      font-weight: 600;
+    }
+    .notes-section {
+      background: #f0f9ff;
+      border-left: 4px solid #2563eb;
+      padding: 15px;
+      margin-top: 20px;
+      border-radius: 4px;
+    }
+    .notes-section h3 {
+      color: #1e40af;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    .notes-section p {
+      color: #475569;
+      font-size: 12px;
+      line-height: 1.5;
+      word-wrap: break-word;
+    }
+    .footer {
+      margin-top: 40px;
+      text-align: center;
+      color: #999;
+      font-size: 10px;
+      border-top: 1px solid #ddd;
+      padding-top: 20px;
+    }
+    @media print {
+      body { background: white; }
+      .container { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📊 RAPPORT DE SATISFACTION</h1>
+      <p>Rapport de satisfaction des services - Qualité et efficacité</p>
+    </div>
 
-    const blob = new Blob([pdfContent], { type: "application/pdf" });
+    <div class="info-row">
+      <div><strong>Date:</strong> ${dateStr}</div>
+      <div><strong>Heure:</strong> ${timeStr}</div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>SERVICES</th>
+          <th>DEMANDES</th>
+          <th>SATISFAITS</th>
+          <th>NON SATISFAITS</th>
+          <th>TAUX SATISFACTION</th>
+          <th>TAUX INSATISFACTION</th>
+        </tr>
+      </thead>
+      <tbody>`;
+
+    SERVICES.forEach((service) => {
+      const serviceKey = service.toLowerCase() as keyof typeof data;
+      const serviceData = data[serviceKey] as any;
+      const rates = satisfactionReportService.calculateRates(serviceData);
+      const satClass = rates.satisfaction >= 80 ? "satisfaction-high" : "satisfaction-low";
+
+      htmlContent += `
+        <tr>
+          <td><strong>${service}</strong></td>
+          <td>${serviceData.requests}</td>
+          <td>${serviceData.satisfied}</td>
+          <td>${serviceData.unsatisfied}</td>
+          <td class="${satClass}">${rates.satisfaction}%</td>
+          <td class="satisfaction-low">${rates.dissatisfaction}%</td>
+        </tr>`;
+    });
+
+    const totalRates = satisfactionReportService.calculateRates(totals);
+    const totalSatClass = totalRates.satisfaction >= 80 ? "satisfaction-high" : "satisfaction-low";
+
+    htmlContent += `
+        <tr class="total-row">
+          <td>TOTAL GLOBAL</td>
+          <td>${totals.requests}</td>
+          <td>${totals.satisfied}</td>
+          <td>${totals.unsatisfied}</td>
+          <td class="${totalSatClass}">${totalRates.satisfaction}%</td>
+          <td>${totalRates.dissatisfaction}%</td>
+        </tr>
+      </tbody>
+    </table>`;
+
+    if (data.notes && data.notes.trim()) {
+      htmlContent += `
+    <div class="notes-section">
+      <h3>📝 NOTES ET OBSERVATIONS</h3>
+      <p>${data.notes.replace(/\n/g, "<br>")}</p>
+    </div>`;
+    }
+
+    htmlContent += `
+    <div class="footer">
+      <p>Document généré automatiquement le ${dateStr} à ${timeStr}</p>
+      <p>© 2026 Système de Gestion de la Flotte Véhiculaire</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    // Créer et télécharger le PDF
+    const blob = new Blob([htmlContent], { type: "application/pdf" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -199,36 +364,156 @@ startxref
 
   const exportToWord = () => {
     const totals = satisfactionReportService.calculateTotals(data);
+    const dateStr = new Date().toLocaleDateString("fr-FR");
+    const timeStr = new Date().toLocaleTimeString("fr-FR");
 
     let htmlContent = `<!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <title>Rapport de Satisfaction</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rapport de Satisfaction - ${dateStr}</title>
   <style>
-    body { font-family: Calibri; margin: 40px; }
-    h1 { color: #2c5aa0; text-align: center; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { border: 1px solid #000; padding: 10px; text-align: center; }
-    th { background-color: #2c5aa0; color: white; }
-    tr:nth-child(even) { background-color: #f0f0f0; }
-    .total-row { font-weight: bold; background-color: #d9e1f2; }
-    .notes { margin-top: 20px; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Calibri', 'Segoe UI', sans-serif;
+      background: white;
+      color: #333;
+      line-height: 1.6;
+      padding: 40px;
+    }
+    .header {
+      text-align: center;
+      border-bottom: 3px solid #d32f2f;
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+    }
+    .header h1 {
+      color: #b71c1c;
+      font-size: 32px;
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+    .header p {
+      color: #666;
+      font-size: 14px;
+    }
+    .metadata {
+      background: #fafafa;
+      padding: 15px;
+      margin-bottom: 30px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .metadata-row {
+      margin: 5px 0;
+    }
+    .metadata-label {
+      font-weight: bold;
+      color: #555;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      font-family: Calibri, sans-serif;
+    }
+    th {
+      background: #c62828;
+      color: white;
+      padding: 12px;
+      text-align: left;
+      font-weight: bold;
+      border: 1px solid #b71c1c;
+      font-size: 12px;
+    }
+    td {
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      text-align: center;
+      font-size: 11px;
+    }
+    tr:nth-child(even) {
+      background-color: #f5f5f5;
+    }
+    .total-row {
+      background-color: #fde4e4;
+      font-weight: bold;
+      border-top: 2px solid #d32f2f;
+    }
+    .total-row td {
+      background-color: #f3e5e5;
+      color: #b71c1c;
+      font-weight: bold;
+    }
+    .satisfaction {
+      color: #2e7d32;
+      font-weight: bold;
+    }
+    .dissatisfaction {
+      color: #c62828;
+      font-weight: bold;
+    }
+    .notes-section {
+      background: #fff3e0;
+      border-left: 5px solid #f57c00;
+      padding: 15px;
+      margin-top: 30px;
+      border-radius: 4px;
+      page-break-inside: avoid;
+    }
+    .notes-section h3 {
+      color: #e65100;
+      margin-bottom: 10px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+    .notes-section p {
+      color: #555;
+      font-size: 11px;
+      line-height: 1.6;
+      word-wrap: break-word;
+    }
+    .footer {
+      margin-top: 40px;
+      text-align: center;
+      color: #999;
+      font-size: 10px;
+      border-top: 1px solid #ddd;
+      padding-top: 20px;
+      page-break-inside: avoid;
+    }
+    @media print {
+      body { background: white; padding: 20px; }
+      table { page-break-inside: avoid; }
+      .notes-section { page-break-inside: avoid; }
+    }
   </style>
 </head>
 <body>
-  <h1>RAPPORT DE SATISFACTION</h1>
-  <p style="text-align: center; color: #666;">Généré le ${new Date().toLocaleDateString("fr-FR")}</p>
+  <div class="header">
+    <h1>📊 RAPPORT DE SATISFACTION DES SERVICES</h1>
+    <p>Analyse qualitative et quantitative de la satisfaction client</p>
+  </div>
+
+  <div class="metadata">
+    <div class="metadata-row"><span class="metadata-label">Date du rapport:</span> ${dateStr}</div>
+    <div class="metadata-row"><span class="metadata-label">Heure de génération:</span> ${timeStr}</div>
+    <div class="metadata-row"><span class="metadata-label">Nombre total de services évalués:</span> ${SERVICES.length}</div>
+    <div class="metadata-row"><span class="metadata-label">Nombre total de demandes:</span> ${totals.requests}</div>
+  </div>
+
+  <h2 style="color: #b71c1c; margin-top: 20px; margin-bottom: 15px; font-size: 16px;">Tableau Récapitulatif</h2>
   
   <table>
     <thead>
       <tr>
-        <th>SERVICES</th>
-        <th>NOMBRE DEMANDES</th>
-        <th>NOMBRES SATISFAIT</th>
-        <th>NOMBRE NON SATISFAITS</th>
-        <th>TAUX SATISFACTION</th>
-        <th>TAUX NON SATISFACTION</th>
+        <th>SERVICE</th>
+        <th>DEMANDES</th>
+        <th>SATISFAITS</th>
+        <th>NON SATISFAITS</th>
+        <th>% SATISFACTION</th>
+        <th>% INSATISFACTION</th>
       </tr>
     </thead>
     <tbody>`;
@@ -240,20 +525,20 @@ startxref
 
       htmlContent += `
       <tr>
-        <td>${service}</td>
+        <td style="text-align: left; font-weight: bold;">${service}</td>
         <td>${serviceData.requests}</td>
-        <td>${serviceData.satisfied}</td>
-        <td>${serviceData.unsatisfied}</td>
-        <td>${rates.satisfaction}%</td>
-        <td>${rates.dissatisfaction}%</td>
+        <td style="color: #2e7d32;">${serviceData.satisfied}</td>
+        <td style="color: #c62828;">${serviceData.unsatisfied}</td>
+        <td class="satisfaction">${rates.satisfaction}%</td>
+        <td class="dissatisfaction">${rates.dissatisfaction}%</td>
       </tr>`;
     });
 
-    // TOTAL
     const totalRates = satisfactionReportService.calculateRates(totals);
+
     htmlContent += `
       <tr class="total-row">
-        <td>TOTAL</td>
+        <td style="text-align: left;">TOTAL GLOBAL</td>
         <td>${totals.requests}</td>
         <td>${totals.satisfied}</td>
         <td>${totals.unsatisfied}</td>
@@ -263,23 +548,28 @@ startxref
     </tbody>
   </table>`;
 
-    if (data.notes) {
+    if (data.notes && data.notes.trim()) {
       htmlContent += `
-  <div class="notes">
-    <h3>NOTES</h3>
-    <p>${data.notes}</p>
+  <div class="notes-section">
+    <h3>📝 Notes et Observations</h3>
+    <p>${data.notes.replace(/\n/g, "<br>")}</p>
   </div>`;
     }
 
     htmlContent += `
+  <div class="footer">
+    <p><strong>Rapport généré automatiquement</strong></p>
+    <p>${dateStr} à ${timeStr}</p>
+    <p style="margin-top: 10px; color: #bbb;">© 2026 Système de Gestion de la Flotte Véhiculaire - Tous droits réservés</p>
+  </div>
 </body>
 </html>`;
 
-    const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8;" });
+    const blob = new Blob([htmlContent], { type: "application/msword" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `satisfaction_${new Date().toISOString().split("T")[0]}.html`;
+    link.download = `satisfaction_${new Date().toISOString().split("T")[0]}.doc`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
