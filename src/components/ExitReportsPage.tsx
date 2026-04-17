@@ -11,12 +11,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
-import { Calendar, Download, FileText, Filter, LogOut } from "lucide-react";
+import { Calendar, Download, FileText, Filter, LogOut, Eye } from "lucide-react";
 import { toast } from "sonner@2.0.3";
 import { format, isAfter, isBefore, isSameDay } from "date-fns";
 import { fr } from "date-fns/locale";
 import { supabase } from "../utils/supabase/client";
 import { SatisfactionTable } from "./SatisfactionTable";
+import { useAuth } from "../contexts/AuthContext";
 
 interface ExitReport {
   id: string;
@@ -38,13 +39,13 @@ interface ExitReport {
 }
 
 export function ExitReportsPage() {
+  const { user } = useAuth();
   const [reports, setReports] = useState<ExitReport[]>([]);
   const [selectedDate, setSelectedDate] = useState("");
   const [showReportDialog, setShowReportDialog] = useState(false);
   const [reportData, setReportData] = useState<ExitReport[]>([]);
   const [reportDate, setReportDate] = useState("");
-  const [selectedReport, setSelectedReport] = useState<ExitReport | null>(null);
-  const [showSatisfactionForm, setShowSatisfactionForm] = useState(false);
+  const [satisfactionTableKey, setSatisfactionTableKey] = useState(0);
 
   useEffect(() => {
     loadExitReports();
@@ -245,36 +246,66 @@ export function ExitReportsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* En-tête */}
-      <div className="flex items-center gap-3">
+    <div className="space-y-8">
+      {/* ============ EN-TÊTE ============ */}
+      <div className="flex items-center gap-3 mb-8">
         <LogOut className="w-8 h-8 text-red-600" />
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Rapports de Sortie
+            Rapports de Sortie & Satisfaction
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Gérer et générer les rapports de sortie des véhicules
+            Remplissez le tableau de satisfaction avant de générer votre rapport
           </p>
         </div>
       </div>
 
-      {/* Filtres et génération */}
+      {/* ============ TABLEAU DE SATISFACTION (VISIBLE DIRECTEMENT) ============ */}
+      <Card className="border-2 border-blue-500 shadow-lg">
+        <CardHeader className="bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+          <CardTitle className="flex items-center gap-2 text-2xl">
+            📊 Tableau de Satisfaction des Services
+          </CardTitle>
+          <CardDescription className="text-blue-100">
+            Remplissez ce formulaire pour documenter la satisfaction des services de votre sortie
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-8">
+          {user ? (
+            <SatisfactionTable
+              key={satisfactionTableKey}
+              exitReportId={`satisfaction-${new Date().toISOString()}`}
+              vehicleId=""
+              userId={user.id}
+              onSave={async () => {
+                toast.success("✅ Rapport de satisfaction enregistré avec succès!");
+                setSatisfactionTableKey(k => k + 1); // Réinitialiser le tableau
+              }}
+            />
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-gray-600">Veuillez vous connecter pour accéder au tableau</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ============ GÉNÉRER UN RAPPORT AVEC LES SORTIES ============ */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Filter className="w-5 h-5" />
-            Générer un Rapport
+            Générer un Rapport de Sorties
           </CardTitle>
           <CardDescription>
-            Sélectionnez une date pour générer un rapport de sortie
+            Consultez toutes les sorties d'une journée donnée
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             <div className="flex gap-4 flex-col md:flex-row">
               <div className="flex-1">
-                <Label htmlFor="report-date">Date de sortie</Label>
+                <Label htmlFor="report-date">Sélectionner une date</Label>
                 <div className="flex gap-2 mt-2">
                   <Input
                     id="report-date"
@@ -285,29 +316,29 @@ export function ExitReportsPage() {
                   />
                   <Button
                     onClick={handleGenerateReport}
-                    className="bg-red-600 hover:bg-red-700"
+                    className="bg-blue-600 hover:bg-blue-700"
                   >
-                    <FileText className="w-4 h-4 mr-2" />
-                    Générer
+                    <Eye className="w-4 h-4 mr-2" />
+                    Voir Sorties
                   </Button>
                 </div>
               </div>
             </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">
-              {reports.length} rapport(s) de sortie au total
+            <div className="text-sm text-gray-600 dark:text-gray-400 pt-2 border-t">
+              📌 Total: <strong>{reports.length} sortie(s)</strong> enregistrée(s)
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Résumé des sorties du jour */}
+      {/* ============ RÉSUMÉ STATISTIQUES ============ */}
       <div className="grid md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">Total Sorties</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{reports.length}</div>
+            <div className="text-3xl font-bold text-blue-600">{reports.length}</div>
           </CardContent>
         </Card>
         <Card>
@@ -315,7 +346,7 @@ export function ExitReportsPage() {
             <CardTitle className="text-sm font-medium">Aujourd'hui</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-3xl font-bold text-green-600">
               {reports.filter((r) => isSameDay(r.departureDate, new Date())).length}
             </div>
           </CardContent>
@@ -325,7 +356,7 @@ export function ExitReportsPage() {
             <CardTitle className="text-sm font-medium">Cette semaine</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-3xl font-bold text-orange-600">
               {
                 reports.filter((r) => {
                   const today = new Date();
@@ -338,90 +369,56 @@ export function ExitReportsPage() {
         </Card>
       </div>
 
-      {/* Dialog de rapport */}
+      {/* ============ DIALOG: VUE DES SORTIES & EXPORTS ============ */}
       <Dialog open={showReportDialog} onOpenChange={setShowReportDialog}>
-        <DialogContent className="max-w-2xl max-h-96 overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-96 overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>📄 Rapport de Sorties</DialogTitle>
-            <DialogDescription>{reportDate}</DialogDescription>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              Sorties du {reportDate}
+            </DialogTitle>
+            <DialogDescription>
+              {reportData.length} sortie(s) trouvée(s) | Téléchargez le rapport complet
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 max-h-64 overflow-y-auto">
+          <div className="space-y-3 max-h-64 overflow-y-auto pr-4">
             {reportData.map((report, index) => (
-              <div key={report.id} className="border-l-4 border-red-500 pl-4 py-2">
-                <p className="font-bold text-sm">Sortie {index + 1}: {report.vehicleName}</p>
-                <p className="text-xs text-gray-600">
-                  {report.userName} • {format(report.departureDate, "p", { locale: fr })}
-                </p>
-                <p className="text-xs text-gray-600">
-                  KM: {report.odometerStart || "-"} | Carburant: {report.fuelLevelStart || "-"}
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-2 text-xs"
-                  onClick={() => {
-                    setSelectedReport(report);
-                    setShowSatisfactionForm(true);
-                  }}
-                >
-                  📊 Ajouter Satisfaction
-                </Button>
+              <div
+                key={report.id}
+                className="border-l-4 border-blue-500 pl-4 py-3 bg-gray-50 dark:bg-gray-900 rounded"
+              >
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <p className="font-bold text-sm">
+                      Sortie {index + 1}: {report.vehicleName}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      🚗 Véhicule: {report.vehicleName} | 👤 Utilisateur: {report.userName}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      📅 {format(report.departureDate, "dd/MM/yyyy HH:mm", { locale: fr })} → {format(report.expectedReturnDate, "dd/MM/yyyy HH:mm", { locale: fr })}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      ⛽ Kilométrage: {report.odometerStart || "-"} km | Carburant: {report.fuelLevelStart || "-"}
+                    </p>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
 
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowReportDialog(false)}
-            >
+          <DialogFooter className="gap-2 pt-6 border-t">
+            <Button variant="outline" onClick={() => setShowReportDialog(false)}>
               Fermer
             </Button>
-            <Button
-              onClick={generateWordReport}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
+            <Button onClick={generateWordReport} className="bg-blue-600 hover:bg-blue-700">
               <Download className="w-4 h-4 mr-2" />
-              Word
+              Télécharger Word
             </Button>
-            <Button
-              onClick={generatePDFReport}
-              className="bg-red-600 hover:bg-red-700"
-            >
+            <Button onClick={generatePDFReport} className="bg-red-600 hover:bg-red-700">
               <Download className="w-4 h-4 mr-2" />
-              PDF
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog Tableau de Satisfaction */}
-      <Dialog open={showSatisfactionForm} onOpenChange={setShowSatisfactionForm}>
-        <DialogContent className="max-w-5xl max-h-screen overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>📊 Rapport de Satisfaction - {selectedReport?.vehicleName}</DialogTitle>
-            <DialogDescription>
-              Enregistrez la satisfaction des services pour ce trajet
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedReport && (
-            <div className="space-y-6">
-              <SatisfactionTable
-                exitReportId={selectedReport.id}
-                vehicleId={selectedReport.vehicleId}
-                userId={selectedReport.userId}
-                onSave={() => {
-                  toast.success("✅ Données sauvegardées avec succès");
-                }}
-              />
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSatisfactionForm(false)}>
-              Fermer
+              Télécharger PDF
             </Button>
           </DialogFooter>
         </DialogContent>
