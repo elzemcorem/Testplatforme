@@ -52,6 +52,14 @@ export const vehicleService = {
         return data;
       }
 
+      // Supabase retourne 0 résultats, vérifier localStorage (fallback)
+      console.log('ℹ️ Supabase: Aucun véhicule, vérifier localStorage...');
+      const cached = this.loadVehiclesFromLocalStorage();
+      if (cached.length > 0) {
+        console.log(`⚠️ ${cached.length} véhicules du localStorage (cache)`);
+        return cached;
+      }
+
       console.log('ℹ️ Aucun véhicule trouvé');
       return [];
     } catch (error) {
@@ -89,7 +97,7 @@ export const vehicleService = {
   },
 
   /**
-   * ➕ Créer un nouveau véhicule (admin only)
+   * ➕ Créer un nouveau véhicule (Supabase → localStorage fallback)
    */
   async createVehicle(vehicle: Omit<Vehicle, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<Vehicle | null> {
     try {
@@ -118,8 +126,14 @@ export const vehicleService = {
         .single();
 
       if (error) {
-        console.error('❌ Erreur Supabase:', error.message);
-        // Fallback sur localStorage
+        console.error('❌ Erreur Supabase lors de l\'insertion:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+        });
+        console.warn('⚠️ Fallback localStorage: sauvegarde locale du véhicule');
+        
+        // Fallback: sauvegarder en localStorage
         const newVehicleData = {
           id: Date.now().toString(),
           name: vehicle.name,
@@ -133,6 +147,7 @@ export const vehicleService = {
         const vehicles = stored ? JSON.parse(stored) : [];
         vehicles.push(newVehicleData);
         localStorage.setItem('vehicles', JSON.stringify(vehicles));
+        
         return {
           id: newVehicleData.id,
           user_id: user.id,
@@ -144,7 +159,7 @@ export const vehicleService = {
         };
       }
 
-      console.log('✅ Véhicule créé:', data.name);
+      console.log('✅ Véhicule créé dans Supabase:', data.name);
       return data;
     } catch (error: any) {
       console.error('❌ Exception lors de la création:', error.message);
