@@ -46,6 +46,7 @@ export function ExitReportsPage() {
   const [reportData, setReportData] = useState<ExitReport[]>([]);
   const [reportDate, setReportDate] = useState("");
   const [satisfactionTableKey, setSatisfactionTableKey] = useState(0);
+  const [tempSatisfactionId] = useState(() => `satisfaction-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
 
   useEffect(() => {
     loadExitReports();
@@ -271,22 +272,16 @@ export function ExitReportsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-8">
-          {user ? (
-            <SatisfactionTable
-              key={satisfactionTableKey}
-              exitReportId={`satisfaction-${new Date().toISOString()}`}
-              vehicleId=""
-              userId={user.id}
-              onSave={async () => {
-                toast.success("✅ Rapport de satisfaction enregistré avec succès!");
-                setSatisfactionTableKey(k => k + 1); // Réinitialiser le tableau
-              }}
-            />
-          ) : (
-            <div className="text-center py-8">
-              <p className="text-gray-600">Veuillez vous connecter pour accéder au tableau</p>
-            </div>
-          )}
+          <SatisfactionTable
+            key={satisfactionTableKey}
+            exitReportId={tempSatisfactionId}
+            vehicleId=""
+            userId={user?.id || ""}
+            onSave={async () => {
+              toast.success("✅ Rapport de satisfaction enregistré avec succès!");
+              setSatisfactionTableKey(k => k + 1); // Réinitialiser le tableau
+            }}
+          />
         </CardContent>
       </Card>
 
