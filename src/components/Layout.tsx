@@ -10,6 +10,7 @@ import { ReservationsPage } from "./ReservationsPage";
 import { AccountManagement } from "./AccountManagement";
 import { VehicleChecklist } from "./VehicleChecklist";
 import { ReportsPage } from "./ReportsPage";
+import { ExitReportsPage } from "./ExitReportsPage";
 import { LoginPage } from "./LoginPage";
 import { MyReservations } from "./MyReservations";
 import { NotificationBell } from "./NotificationBell";
@@ -76,6 +77,8 @@ export function Layout() {
           return <VehicleChecklist />;
         case "reports":
           return <ReportsPage />;
+        case "exit-reports":
+          return <ExitReportsPage />;
         case "chat":
           return <Chat />;
         case "settings":
