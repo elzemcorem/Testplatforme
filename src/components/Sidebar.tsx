@@ -15,7 +15,8 @@ import {
   Users,
   UserPlus,
   CheckSquare,
-  ClipboardCheck
+  ClipboardCheck,
+  HelpCircle
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -99,6 +100,12 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
           description: "Discussion en temps réel"
         },
         {
+          id: "help",
+          name: "Aide",
+          icon: HelpCircle,
+          description: "Aide intelligente"
+        },
+        {
           id: "settings",
           name: "Settings & Profile",
           icon: User,
@@ -152,6 +159,12 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
           description: "Discussion en temps réel"
         },
         {
+          id: "help",
+          name: "Aide",
+          icon: HelpCircle,
+          description: "Aide intelligente"
+        },
+        {
           id: "settings",
           name: "Settings & Profile",
           icon: User,
@@ -179,6 +192,12 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
         name: "Chat",
         icon: MessageSquare,
         description: "Discussion en temps réel"
+      },
+      {
+        id: "help",
+        name: "Aide",
+        icon: HelpCircle,
+        description: "Aide intelligente"
       },
       {
         id: "settings",

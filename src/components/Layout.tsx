@@ -11,6 +11,7 @@ import { AccountManagement } from "./AccountManagement";
 import { VehicleChecklist } from "./VehicleChecklist";
 import { ReportsPage } from "./ReportsPage";
 import { ExitReportsPage } from "./ExitReportsPage";
+import { IntelligentHelpPage } from "./IntelligentHelpPage";
 import { LoginPage } from "./LoginPage";
 import { MyReservations } from "./MyReservations";
 import { NotificationBell } from "./NotificationBell";
@@ -57,6 +58,8 @@ export function Layout() {
           return <AccountManagement />;
         case "chat":
           return <Chat />;
+        case "help":
+          return <IntelligentHelpPage />;
         case "settings":
           return <UserSettings />;
         default:
@@ -81,6 +84,8 @@ export function Layout() {
           return <ExitReportsPage />;
         case "chat":
           return <Chat />;
+        case "help":
+          return <IntelligentHelpPage />;
         case "settings":
           return <UserSettings />;
         default:
@@ -96,6 +101,8 @@ export function Layout() {
         return <MyReservations />;
       case "chat":
         return <Chat />;
+      case "help":
+        return <IntelligentHelpPage />;
       case "settings":
         return <UserSettings />;
       default:

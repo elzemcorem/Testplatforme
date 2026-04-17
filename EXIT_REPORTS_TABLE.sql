@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS exit_reports (
   vehicle_id UUID NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
   vehicle_name TEXT NOT NULL,
   reservation_id UUID REFERENCES reservations(id) ON DELETE SET NULL,
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL,
   user_name TEXT NOT NULL,
   user_email TEXT NOT NULL,
   
@@ -36,11 +36,9 @@ CREATE TABLE IF NOT EXISTS exit_reports (
   global_notes TEXT,
   
   -- Métadonnées
-  created_by UUID NOT NULL REFERENCES auth.users(id),
+  created_by UUID NOT NULL,
   created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  
-  CONSTRAINT exit_reports_user_fk FOREIGN KEY (user_id) REFERENCES auth.users(id)
+  updated_at TIMESTAMP DEFAULT NOW()
 );
 
 -- Index pour les requêtes courantes

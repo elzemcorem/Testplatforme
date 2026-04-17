@@ -16,6 +16,7 @@ import { toast } from "sonner@2.0.3";
 import { format, isAfter, isBefore, isSameDay } from "date-fns";
 import { fr } from "date-fns/locale";
 import { supabase } from "../utils/supabase/client";
+import { SatisfactionTable } from "./SatisfactionTable";
 
 interface ExitReport {
   id: string;
@@ -41,6 +42,8 @@ export function ExitReportsPage() {
   const [showReportDialog, setShowReportDialog] = useState(false);
   const [reportData, setReportData] = useState<ExitReport[]>([]);
   const [reportDate, setReportDate] = useState("");
+  const [selectedReport, setSelectedReport] = useState<ExitReport | null>(null);
+  const [showSatisfactionForm, setShowSatisfactionForm] = useState(false);
 
   useEffect(() => {
     loadExitReports();
@@ -351,6 +354,17 @@ export function ExitReportsPage() {
                 <p className="text-xs text-gray-600">
                   KM: {report.odometerStart || "-"} | Carburant: {report.fuelLevelStart || "-"}
                 </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-2 text-xs"
+                  onClick={() => {
+                    setSelectedReport(report);
+                    setShowSatisfactionForm(true);
+                  }}
+                >
+                  📊 Ajouter Satisfaction
+                </Button>
               </div>
             ))}
           </div>
@@ -375,6 +389,37 @@ export function ExitReportsPage() {
             >
               <Download className="w-4 h-4 mr-2" />
               PDF
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Tableau de Satisfaction */}
+      <Dialog open={showSatisfactionForm} onOpenChange={setShowSatisfactionForm}>
+        <DialogContent className="max-w-5xl max-h-screen overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>📊 Rapport de Satisfaction - {selectedReport?.vehicleName}</DialogTitle>
+            <DialogDescription>
+              Enregistrez la satisfaction des services pour ce trajet
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedReport && (
+            <div className="space-y-6">
+              <SatisfactionTable
+                exitReportId={selectedReport.id}
+                vehicleId={selectedReport.vehicleId}
+                userId={selectedReport.userName}
+                onSave={() => {
+                  toast.success("✅ Données sauvegardées avec succès");
+                }}
+              />
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSatisfactionForm(false)}>
+              Fermer
             </Button>
           </DialogFooter>
         </DialogContent>
