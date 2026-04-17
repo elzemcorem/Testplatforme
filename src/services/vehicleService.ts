@@ -109,17 +109,20 @@ export const vehicleService = {
         return null;
       }
 
-      // Insérer dans Supabase
+      // Insérer dans Supabase - adapter aux colonnes réelles de la table
       const { data, error } = await supabase
         .from('vehicles')
         .insert([
           {
             name: vehicle.name,
-            type: vehicle.type,
-            capacity: vehicle.capacity,
-            fuel_type: vehicle.fuel_type,
-            image_data: vehicle.image_data,
-            user_id: user.id,
+            type: vehicle.type || 'Berline',
+            capacity: vehicle.capacity || 5,
+            fuel_type: vehicle.fuel_type || 'Essence',
+            image_data: vehicle.image_data || null,
+            created_by: user.id,
+            is_available: true,
+            mileage: 0,
+            status: 'good',
           },
         ])
         .select()
