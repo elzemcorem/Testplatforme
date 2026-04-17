@@ -19,6 +19,7 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { toast } from "sonner@2.0.3";
 import { getInitials } from "../utils/auth";
+import { themeService, type ColorScheme, colorSchemes } from "../services/themeService";
 
 interface UserPreferences {
   emailNotifications: boolean;
@@ -40,6 +41,7 @@ interface UserProfile {
 
 export function UserSettings() {
   const { currentUser } = useAuth();
+  const [selectedColorScheme, setSelectedColorScheme] = useState<ColorScheme>('blue');
   
   // État du profil
   const [profile, setProfile] = useState<UserProfile>({
@@ -73,6 +75,7 @@ export function UserSettings() {
     if (currentUser) {
       loadUserProfile();
       loadUserPreferences();
+      loadColorScheme();
     }
   }, [currentUser]);
 
@@ -117,6 +120,17 @@ export function UserSettings() {
         console.error("Error loading preferences:", error);
       }
     }
+  };
+
+  const loadColorScheme = () => {
+    const scheme = themeService.getCurrentScheme();
+    setSelectedColorScheme(scheme);
+  };
+
+  const handleColorSchemeChange = (scheme: ColorScheme) => {
+    setSelectedColorScheme(scheme);
+    themeService.setColorScheme(scheme);
+    toast.success(`Thème changé en ${themeService.getSchemeLabel(scheme)}`);
   };
 
   const handleSaveProfile = () => {
@@ -553,6 +567,61 @@ export function UserSettings() {
                 toast.info("Le mode compact sera bientôt disponible");
               }}
             />
+          </div>
+
+          <Separator />
+
+          {/* Palettes de couleurs */}
+          <div className="space-y-3">
+            <Label>Palette de couleurs globale</Label>
+            <p className="text-sm text-muted-foreground">
+              Choisissez votre schéma de couleurs préféré
+            </p>
+            
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {(themeService.getAvailableSchemes() as ColorScheme[]).map((scheme) => {
+                const colors = colorSchemes[scheme];
+                return (
+                  <button
+                    key={scheme}
+                    onClick={() => handleColorSchemeChange(scheme)}
+                    className={`p-4 rounded-lg border-2 transition-all ${
+                      selectedColorScheme === scheme
+                        ? 'border-current ring-2 ring-offset-2'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                    }`}
+                    style={
+                      selectedColorScheme === scheme
+                        ? { borderColor: colors.primary, '--tw-ring-color': colors.primary } as any
+                        : {}
+                    }
+                  >
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="flex gap-1">
+                        <div
+                          className="w-4 h-4 rounded"
+                          style={{ backgroundColor: colors.primary }}
+                          title={colors.primary}
+                        />
+                        <div
+                          className="w-4 h-4 rounded"
+                          style={{ backgroundColor: colors.secondary }}
+                          title={colors.secondary}
+                        />
+                        <div
+                          className="w-4 h-4 rounded"
+                          style={{ backgroundColor: colors.accent }}
+                          title={colors.accent}
+                        />
+                      </div>
+                      <span className="text-xs font-medium">
+                        {themeService.getSchemeLabel(scheme)}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </CardContent>
       </Card>

@@ -8,6 +8,8 @@ import { useAuth } from "../contexts/AuthContext";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Badge } from "./ui/badge";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
+import { useEffect } from "react";
+import { themeService } from "../services/themeService";
 
 export function LoginPage() {
   const [email, setEmail] = useState("");
@@ -17,6 +19,11 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const { login } = useAuth();
+
+  // Initialiser le thème au chargement
+  useEffect(() => {
+    themeService.initializeTheme();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,8 +103,33 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-primary/10 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div 
+      className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-primary/10 flex items-center justify-center p-4 relative overflow-hidden"
+      style={{
+        backgroundImage: `
+          radial-gradient(circle at 20% 50%, rgba(37, 99, 235, 0.1) 0%, transparent 50%),
+          radial-gradient(circle at 80% 80%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
+          linear-gradient(135deg, rgba(241, 245, 249, 0.5) 0%, rgba(226, 232, 240, 0.5) 100%)
+        `,
+      }}
+    >
+      {/* Élément décoratif de station pétrolière floutée */}
+      <div 
+        className="absolute inset-0 opacity-5 pointer-events-none"
+        style={{
+          backgroundImage: `url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800"><defs><filter id="blur"><feGaussianBlur stdDeviation="4"/></filter></defs><g filter="url(%23blur)"><rect x="100" y="200" width="40" height="400" fill="%23666"/><rect x="160" y="180" width="35" height="420" fill="%23666"/><rect x="220" y="220" width="40" height="380" fill="%23666"/><circle cx="150" cy="150" r="60" fill="%23888"/><circle cx="200" cy="120" r="50" fill="%23888"/><path d="M 50 400 L 300 350 L 350 400 Z" fill="%23555"/><rect x="500" y="250" width="300" height="300" fill="%23555" opacity="0.3"/><circle cx="700" cy="200" r="80" fill="%23777" opacity="0.2"/></g></svg>')`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundAttachment: 'fixed',
+          filter: 'blur(8px)',
+        }}
+      />
+
+      {/* Overlay transparent élégant */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-secondary/10 pointer-events-none" />
+
+      {/* Contenu de connexion */}
+      <div className="w-full max-w-md relative z-10">
         {/* Logo et titre */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-primary to-primary/80 rounded-full mb-4 shadow-lg">
