@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -69,6 +69,13 @@ export function ReservationForm({ isOpen, onClose, vehicleName, vehicleId }: Res
   const [startDate, setStartDate] = useState<Date>();
   const [endDate, setEndDate] = useState<Date>();
   const { currentUser } = useAuth();
+
+  // Pré-remplir le nom automatiquement quand le dialog s'ouvre
+  useEffect(() => {
+    if (isOpen && currentUser?.name && !name) {
+      setName(currentUser.name);
+    }
+  }, [isOpen, currentUser, name]);
 
   const handleSubmit = async () => {
     // Validation simple
