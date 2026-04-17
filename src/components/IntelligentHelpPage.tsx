@@ -1,11 +1,10 @@
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { MessageSquare } from "lucide-react";
+import { Chatbot } from "./Chatbot";
 
 /**
- * Page d'Aide Intelligente - Chatbot
+ * Page d'Aide Intelligente - Chatbot Intelligent
  * 
- * Cette page est prête pour l'intégration du chatbot.
- * Le composant du chatbot sera inséré ici.
+ * Assistant conversationnel pour la plateforme de réservation de véhicules
  */
 export function IntelligentHelpPage() {
   return (
@@ -18,29 +17,15 @@ export function IntelligentHelpPage() {
             Aide Intelligente
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Assistance et support disponibles 24/7
+            Assistant conversationnel disponible 24/7
           </p>
         </div>
       </div>
 
-      {/* Chatbot Container */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MessageSquare className="w-5 h-5" />
-            Assistant Intelligent
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="min-h-96">
-          {/* LE CHATBOT SERA INSÉRÉ ICI */}
-          <div id="chatbot-container" className="w-full h-full">
-            {/* Placeholder - sera remplacé par le composant chatbot */}
-            <div className="flex items-center justify-center h-96 text-center text-gray-400">
-              <p>🤖 Chatbot en cours de chargement...</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Chatbot Container - Hauteur responsive */}
+      <div className="h-screen max-h-[600px] rounded-lg overflow-hidden shadow-lg border border-gray-200 dark:border-gray-700">
+        <Chatbot />
+      </div>
     </div>
   );
 }
