@@ -46,7 +46,7 @@ export function ExitReportsPage() {
   const [reportData, setReportData] = useState<ExitReport[]>([]);
   const [reportDate, setReportDate] = useState("");
   const [satisfactionTableKey, setSatisfactionTableKey] = useState(0);
-  const [tempSatisfactionId] = useState(() => `satisfaction-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+  const [tempSatisfactionId] = useState(() => crypto.randomUUID());
 
   useEffect(() => {
     loadExitReports();

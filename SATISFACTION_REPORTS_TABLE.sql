@@ -1,8 +1,11 @@
--- Table pour les rapports de satisfaction de services (dans exit_reports)
-CREATE TABLE IF NOT EXISTS satisfaction_reports (
+-- SUPPRIMER LA TABLE SI ELLE EXISTE DÉJÀ (pour recréer avec les bonnes colonnes)
+DROP TABLE IF EXISTS satisfaction_reports CASCADE;
+
+-- Table pour les rapports de satisfaction de services
+CREATE TABLE satisfaction_reports (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  exit_report_id UUID NOT NULL REFERENCES exit_reports(id) ON DELETE CASCADE,
-  vehicle_id UUID NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+  exit_report_id UUID REFERENCES exit_reports(id) ON DELETE CASCADE,
+  vehicle_id UUID REFERENCES vehicles(id) ON DELETE CASCADE,
   user_id UUID NOT NULL,
   
   -- Services avec leurs données
@@ -34,14 +37,13 @@ CREATE TABLE IF NOT EXISTS satisfaction_reports (
 );
 
 -- Index
-CREATE INDEX IF NOT EXISTS satisfaction_reports_exit_report_id ON satisfaction_reports(exit_report_id);
-CREATE INDEX IF NOT EXISTS satisfaction_reports_vehicle_id ON satisfaction_reports(vehicle_id);
-CREATE INDEX IF NOT EXISTS satisfaction_reports_user_id ON satisfaction_reports(user_id);
+CREATE INDEX satisfaction_reports_exit_report_id ON satisfaction_reports(exit_report_id);
+CREATE INDEX satisfaction_reports_vehicle_id ON satisfaction_reports(vehicle_id);
+CREATE INDEX satisfaction_reports_user_id ON satisfaction_reports(user_id);
 
 -- RLS
 ALTER TABLE satisfaction_reports ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "satisfaction_reports_all" ON satisfaction_reports;
 CREATE POLICY "satisfaction_reports_all"
 ON satisfaction_reports FOR ALL
 USING (true)

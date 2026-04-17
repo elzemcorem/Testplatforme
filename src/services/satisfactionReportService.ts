@@ -35,8 +35,8 @@ export const satisfactionReportService = {
         .from("satisfaction_reports")
         .insert([
           {
-            exit_report_id: exitReportId,
-            vehicle_id: vehicleId,
+            exit_report_id: exitReportId || null,
+            vehicle_id: vehicleId || null,
             user_id: userId,
             dcm_requests: data.dcm.requests,
             dcm_satisfied: data.dcm.satisfied,
