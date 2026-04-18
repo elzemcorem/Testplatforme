@@ -113,15 +113,15 @@ export function LoginPage() {
         `,
       }}
     >
-      {/* Élément décoratif de station pétrolière floutée */}
+      {/* Élément décoratif de station pétrolière moderne */}
       <div 
-        className="absolute inset-0 opacity-5 pointer-events-none"
+        className="absolute inset-0 opacity-25 pointer-events-none"
         style={{
-          backgroundImage: `url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800"><defs><filter id="blur"><feGaussianBlur stdDeviation="4"/></filter></defs><g filter="url(%23blur)"><rect x="100" y="200" width="40" height="400" fill="%23666"/><rect x="160" y="180" width="35" height="420" fill="%23666"/><rect x="220" y="220" width="40" height="380" fill="%23666"/><circle cx="150" cy="150" r="60" fill="%23888"/><circle cx="200" cy="120" r="50" fill="%23888"/><path d="M 50 400 L 300 350 L 350 400 Z" fill="%23555"/><rect x="500" y="250" width="300" height="300" fill="%23555" opacity="0.3"/><circle cx="700" cy="200" r="80" fill="%23777" opacity="0.2"/></g></svg>')`,
+          backgroundImage: `url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800"><defs><linearGradient id="skyGrad" x1="0%25" y1="0%25" x2="0%25" y2="100%25"><stop offset="0%25" style="stop-color:%232563eb;stop-opacity:0.08"/><stop offset="100%25" style="stop-color:%23ffffff;stop-opacity:0.02"/></linearGradient><filter id="softBlur"><feGaussianBlur stdDeviation="1.5"/></filter></defs><rect width="1200" height="800" fill="url(%23skyGrad)"/><line x1="0" y1="500" x2="1200" y2="500" stroke="%236b7280" stroke-width="2" opacity="0.15"/><g filter="url(%23softBlur)"><rect x="150" y="250" width="50" height="350" fill="%234b5563" rx="3"/><rect x="230" y="200" width="50" height="400" fill="%234b5563" rx="3"/><rect x="310" y="280" width="50" height="320" fill="%234b5563" rx="3"/><circle cx="175" cy="180" r="70" fill="%235a6b7d" opacity="0.7"/><circle cx="255" cy="150" r="65" fill="%235a6b7d" opacity="0.7"/><circle cx="335" cy="190" r="70" fill="%235a6b7d" opacity="0.7"/><rect x="600" y="300" width="80" height="250" fill="%234b5563" rx="4"/><rect x="700" y="280" width="80" height="270" fill="%234b5563" rx="4"/><rect x="800" y="320" width="80" height="230" fill="%234b5563" rx="4"/><circle cx="640" cy="220" r="60" fill="%235a6b7d" opacity="0.6"/><circle cx="740" cy="200" r="65" fill="%235a6b7d" opacity="0.6"/><circle cx="840" cy="240" r="60" fill="%235a6b7d" opacity="0.6"/><rect x="450" y="480" width="120" height="40" fill="%236b7280" rx="2"/><rect x="600" y="480" width="120" height="40" fill="%236b7280" rx="2"/><rect x="750" y="480" width="120" height="40" fill="%236b7280" rx="2"/><path d="M 100 550 Q 300 520 500 550 L 500 800 L 100 800 Z" fill="%236b7280" opacity="0.08"/><path d="M 700 560 Q 900 530 1100 560 L 1100 800 L 700 800 Z" fill="%236b7280" opacity="0.08"/></g></svg>')`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundAttachment: 'fixed',
-          filter: 'blur(8px)',
+          filter: 'blur(1px)',
         }}
       />
 

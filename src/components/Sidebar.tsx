@@ -19,6 +19,7 @@ import {
   HelpCircle
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { themeService } from "../services/themeService";
 import {
   Popover,
   PopoverContent,
@@ -32,10 +33,33 @@ interface SidebarProps {
   onPageChange: (page: string) => void;
 }
 
+// Fonctions utilitaires
+const hexToRgb = (hex: string): string => {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '0, 0, 0';
+};
+
+const adjustBrightness = (color: string, percent: number): string => {
+  const num = parseInt(color.replace('#', ''), 16);
+  const amt = Math.round(2.55 * percent);
+  const R = (num >> 16) + amt;
+  const G = (num >> 8 & 0x00FF) + amt;
+  const B = (num & 0x0000FF) + amt;
+  return '#' + (
+    0x1000000 +
+    (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
+    (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
+    (B < 255 ? B < 1 ? 0 : B : 255)
+  ).toString(16).slice(1);
+};
+
 export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
   const { currentUser, logout, switchAccount, getAllAccounts } = useAuth();
+  const colors = themeService.getCurrentColors();
+  const scheme = themeService.getCurrentScheme();
+  const isChromatic = scheme === 'chromatic';
 
   const allAccounts = getAllAccounts();
 
@@ -219,10 +243,19 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
     <div className="ml-6 my-6">
       <div 
         className={cn(
-          "flex flex-col h-[calc(100vh-3rem)] transition-all duration-300 ease-in-out rounded-3xl",
-          "bg-gradient-to-b from-sidebar via-sidebar to-sidebar-accent shadow-2xl border border-sidebar-border/20 overflow-hidden",
+          "flex flex-col h-[calc(100vh-3rem)] transition-all duration-300 ease-in-out rounded-3xl overflow-hidden",
           isExpanded ? "w-64" : "w-20"
         )}
+        style={{
+          background: isChromatic 
+            ? `linear-gradient(180deg, rgba(${hexToRgb(colors.primary)}, 0.08) 0%, rgba(${hexToRgb(colors.secondary)}, 0.04) 100%)`
+            : `linear-gradient(to bottom, ${colors.background}95, ${colors.background}85)`,
+          borderColor: isChromatic ? `${colors.primary}20` : `${colors.primary}40`,
+          boxShadow: isChromatic 
+            ? `0 20px 25px -5px rgba(${hexToRgb(colors.primary)}, 0.1)`
+            : `0 20px 25px -5px rgba(0, 0, 0, 0.1)`,
+          border: `1px solid ${isChromatic ? `${colors.primary}15` : `${colors.primary}30`}`,
+        }}
       >
         {/* Header with Logo */}
         <div className="p-6 flex flex-col items-center relative">
@@ -230,21 +263,36 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
           {isExpanded && (
             <button
               onClick={() => setIsExpanded(false)}
-              className="absolute top-4 right-4 w-8 h-8 bg-sidebar-accent/50 hover:bg-sidebar-accent rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110"
+              className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110"
+              style={{
+                backgroundColor: `${colors.primary}30`,
+                color: colors.primary,
+              }}
             >
-              <X className="w-4 h-4 text-sidebar-foreground" />
+              <X className="w-4 h-4" />
             </button>
           )}
           
-          <div className="w-12 h-12 bg-gradient-to-br from-sidebar-primary to-sidebar-primary/80 rounded-full flex items-center justify-center shadow-lg">
-            <Car className="w-6 h-6 text-sidebar-primary-foreground" />
+          <div 
+            className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg"
+            style={{
+              background: `linear-gradient(to br, ${colors.primary}, ${adjustBrightness(colors.primary, -20)})`,
+            }}
+          >
+            <Car className="w-6 h-6 text-white" />
           </div>
           {isExpanded && (
             <div className="mt-3 text-center">
-              <h2 className="text-sidebar-foreground font-semibold text-base whitespace-nowrap">
+              <h2 
+                className="font-semibold text-base whitespace-nowrap"
+                style={{ color: colors.foreground }}
+              >
                 Bénin Petro
               </h2>
-              <p className="text-sidebar-foreground/70 text-xs whitespace-nowrap mt-1">
+              <p 
+                className="text-xs whitespace-nowrap mt-1"
+                style={{ color: `${colors.foreground}80` }}
+              >
                 Location de véhicules
               </p>
             </div>
@@ -268,31 +316,42 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
                       isExpanded 
                         ? "w-full px-4 py-3 justify-start rounded-xl" 
                         : "w-12 h-12 justify-center mx-auto rounded-full",
-                      isActive
-                        ? "bg-gradient-to-br from-sidebar-primary to-sidebar-primary/80 shadow-lg shadow-sidebar-primary/30 scale-105"
-                        : "bg-gradient-to-br from-sidebar-accent to-sidebar-accent/80 hover:from-sidebar-primary/80 hover:to-sidebar-primary/60"
+                      isChromatic && "chromatic-nav-item"
                     )}
+                    style={{
+                      backgroundColor: isActive
+                        ? colors.primary
+                        : `${colors.primary}15`,
+                      color: colors.foreground,
+                      boxShadow: isActive && isChromatic
+                        ? `0 4px 12px rgba(${this.hexToRgb(colors.primary)}, 0.3)`
+                        : 'none',
+                    }}
                   >
-                    <Icon className={cn(
-                      "transition-colors duration-300 flex-shrink-0",
-                      "w-5 h-5",
-                      isActive 
-                        ? "text-sidebar-primary-foreground" 
-                        : "text-sidebar-accent-foreground group-hover:text-sidebar-primary-foreground"
-                    )} />
+                    <Icon 
+                      className="w-5 h-5 flex-shrink-0 transition-colors duration-300"
+                      style={{
+                        color: isActive ? 'white' : colors.primary,
+                      }}
+                    />
                     
                     {isExpanded && (
                       <div className="ml-3 overflow-hidden">
-                        <div className={cn(
-                          "font-medium text-sm whitespace-nowrap transition-colors duration-300",
-                          isActive 
-                            ? "text-sidebar-primary-foreground" 
-                            : "text-sidebar-accent-foreground group-hover:text-sidebar-primary-foreground"
-                        )}>
+                        <div
+                          className="font-medium text-sm whitespace-nowrap transition-colors duration-300"
+                          style={{
+                            color: isActive ? 'white' : colors.foreground,
+                          }}
+                        >
                           {item.name}
                         </div>
                         {isActive && (
-                          <div className="text-xs text-sidebar-primary-foreground/70 mt-0.5 whitespace-nowrap">
+                          <div
+                            className="text-xs mt-0.5 whitespace-nowrap"
+                            style={{
+                              color: isActive ? 'rgba(255, 255, 255, 0.7)' : `${colors.foreground}70`,
+                            }}
+                          >
                             {item.description}
                           </div>
                         )}
@@ -302,24 +361,50 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
                     {/* Active indicator */}
                     {isActive && !isExpanded && (
                       <>
-                        <div className="absolute inset-0 rounded-full bg-sidebar-primary opacity-20 animate-pulse" />
-                        <div className="absolute -right-2 top-1/2 -translate-y-1/2 w-1 h-6 bg-sidebar-primary rounded-l-full" />
+                        <div 
+                          className="absolute inset-0 rounded-full animate-pulse"
+                          style={{
+                            backgroundColor: `${colors.primary}20`,
+                          }}
+                        />
+                        <div 
+                          className="absolute -right-2 top-1/2 -translate-y-1/2 w-1 h-6 rounded-l-full"
+                          style={{
+                            backgroundColor: colors.primary,
+                          }}
+                        />
                       </>
                     )}
                     
                     {/* Active indicator for expanded state */}
                     {isActive && isExpanded && (
-                      <div className="absolute right-2 top-1/2 -translate-y-1/2 w-2 h-2 bg-sidebar-primary-foreground rounded-full animate-pulse" />
+                      <div 
+                        className="absolute right-2 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full animate-pulse"
+                        style={{
+                          backgroundColor: 'white',
+                        }}
+                      />
                     )}
                   </button>
 
                   {/* Tooltip for collapsed state */}
                   {!isExpanded && (
-                    <div className="absolute left-full ml-4 px-3 py-2 bg-gradient-to-br from-sidebar-primary to-sidebar-primary/90 text-sidebar-primary-foreground rounded-xl opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none whitespace-nowrap z-50 shadow-lg transform translate-x-2 group-hover:translate-x-0">
+                    <div
+                      className="absolute left-full ml-4 px-3 py-2 rounded-xl opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none whitespace-nowrap z-50 shadow-lg transform translate-x-2 group-hover:translate-x-0"
+                      style={{
+                        background: `linear-gradient(to br, ${colors.primary}, ${colors.secondary})`,
+                        color: 'white',
+                      }}
+                    >
                       <div className="font-medium text-sm">{item.name}</div>
                       <div className="text-xs opacity-75 mt-1">{item.description}</div>
                       {/* Tooltip arrow */}
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-2 h-2 bg-sidebar-primary rotate-45" />
+                      <div 
+                        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-2 h-2 rotate-45"
+                        style={{
+                          backgroundColor: colors.primary,
+                        }}
+                      />
                     </div>
                   )}
                 </div>
@@ -334,30 +419,50 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
             <PopoverTrigger asChild>
               <div className="relative group">
                 <div 
-                  className="w-12 h-12 bg-gradient-to-br from-sidebar-primary to-sidebar-primary/80 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-all duration-300 cursor-pointer"
+                  className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-all duration-300 cursor-pointer"
+                  style={{
+                    background: `linear-gradient(to br, ${colors.primary}, ${adjustBrightness(colors.primary, -20)})`,
+                  }}
                 >
-                  <span className="text-sidebar-primary-foreground font-semibold text-lg">
+                  <span className="text-white font-semibold text-lg">
                     {currentUser?.initials || "LG"}
                   </span>
                 </div>
                 
                 {/* Profile tooltip for collapsed state */}
                 {!isExpanded && !showAccountMenu && (
-                  <div className="absolute left-full ml-4 px-3 py-2 bg-gradient-to-br from-sidebar-primary to-sidebar-primary/90 text-sidebar-primary-foreground rounded-xl opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none whitespace-nowrap z-50 shadow-lg transform translate-x-2 group-hover:translate-x-0">
+                  <div
+                    className="absolute left-full ml-4 px-3 py-2 rounded-xl opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none whitespace-nowrap z-50 shadow-lg transform translate-x-2 group-hover:translate-x-0"
+                    style={{
+                      background: `linear-gradient(to br, ${colors.primary}, ${colors.secondary})`,
+                      color: 'white',
+                    }}
+                  >
                     <div className="font-medium text-sm">{currentUser?.name || "Utilisateur"}</div>
                     <div className="text-xs opacity-75 mt-1">Cliquez pour gérer le compte</div>
                     {/* Tooltip arrow */}
-                    <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-2 h-2 bg-sidebar-primary rotate-45" />
+                    <div 
+                      className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-2 h-2 rotate-45"
+                      style={{
+                        backgroundColor: colors.primary,
+                      }}
+                    />
                   </div>
                 )}
                 
                 {/* Profile info for expanded state */}
                 {isExpanded && (
                   <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 text-center pointer-events-none">
-                    <div className="text-sidebar-foreground font-medium text-sm whitespace-nowrap">
+                    <div
+                      className="font-medium text-sm whitespace-nowrap"
+                      style={{ color: colors.foreground }}
+                    >
                       {currentUser?.name || "Utilisateur"}
                     </div>
-                    <div className="text-sidebar-foreground/70 text-xs whitespace-nowrap">
+                    <div
+                      className="text-xs whitespace-nowrap"
+                      style={{ color: `${colors.foreground}80` }}
+                    >
                       {currentUser?.role === "admin" ? "Administrateur" : 
                        currentUser?.role === "controller" ? "Contrôleur" : "Utilisateur"}
                     </div>

@@ -3,7 +3,7 @@
  * Gère les palettes de couleurs personnalisables
  */
 
-export type ColorScheme = 'blue' | 'red' | 'purple' | 'ash' | 'yellow' | 'chromatic';
+export type ColorScheme = 'blue' | 'red' | 'purple' | 'ash' | 'yellow' | 'green' | 'chromatic';
 
 export interface ThemeColors {
   primary: string;
@@ -48,6 +48,13 @@ export const colorSchemes: Record<ColorScheme, ThemeColors> = {
     accent: '#fde047',
     background: '#fefce8',
     foreground: '#713f12',
+  },
+  green: {
+    primary: '#059669',
+    secondary: '#10b981',
+    accent: '#34d399',
+    background: '#f0fdf4',
+    foreground: '#064e3b',
   },
   chromatic: {
     primary: '#8b5cf6',
@@ -120,8 +127,13 @@ class ThemeService {
       document.head.appendChild(styleElement);
     }
 
+    // Calcul des couleurs secondaires pour la sidebar
+    const sidebarBg = scheme === 'chromatic' ? 'rgba(255, 255, 255, 0.02)' : `${colors.background}95`;
+    const sidebarAccent = scheme === 'chromatic' ? `${colors.secondary}15` : `${colors.primary}20`;
+    const sidebarBorder = scheme === 'chromatic' ? `${colors.primary}10` : `${colors.primary}30`;
+
     // CSS avec les couleurs personnalisées
-    styleElement.textContent = `
+    let styleContent = `
       :root {
         --primary: ${colors.primary};
         --secondary: ${colors.secondary};
@@ -191,7 +203,80 @@ class ThemeService {
       .theme-text-secondary {
         color: ${colors.secondary};
       }
+
+      /* Sidebar Styles */
+      .sidebar {
+        background: linear-gradient(to bottom, ${sidebarBg}, ${sidebarBg});
+        border-color: ${sidebarBorder};
+      }
+
+      .sidebar-primary {
+        color: ${colors.primary};
+        background-color: ${colors.primary};
+      }
+
+      .sidebar-primary-foreground {
+        color: white;
+      }
+
+      .sidebar-accent {
+        background-color: ${sidebarAccent};
+      }
+
+      .sidebar-foreground {
+        color: ${colors.foreground};
+      }
+
+      .sidebar-border {
+        border-color: ${sidebarBorder};
+      }
     `;
+
+    // Styles spéciaux pour chromatic avec transitions
+    if (scheme === 'chromatic') {
+      styleContent += `
+        /* Chromatic Theme - Transitions au survol */
+        .chromatic-button {
+          background-color: ${colors.primary};
+          color: white;
+          transition: all 0.4s ease;
+        }
+
+        .chromatic-button:hover {
+          background-color: ${colors.secondary};
+          transform: translateY(-2px);
+          box-shadow: 0 8px 16px rgba(236, 72, 153, 0.3);
+        }
+
+        .chromatic-button:active {
+          background-color: ${colors.accent};
+        }
+
+        /* Fond très léger pour chromatic */
+        .chromatic-bg {
+          background: linear-gradient(135deg, rgba(243, 240, 255, 0.4) 0%, rgba(248, 240, 245, 0.2) 100%);
+        }
+
+        /* Sidebar pour chromatic - très transparent */
+        .chromatic-sidebar {
+          background: linear-gradient(180deg, rgba(139, 92, 246, 0.08) 0%, rgba(236, 72, 153, 0.04) 100%);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(139, 92, 246, 0.1);
+        }
+
+        /* Navigation items avec animations */
+        .chromatic-nav-item {
+          transition: all 0.3s ease;
+        }
+
+        .chromatic-nav-item:hover {
+          background: linear-gradient(135deg, ${colors.primary}20 0%, ${colors.secondary}15 100%);
+          transform: translateX(4px);
+        }
+      `;
+    }
+
+    styleElement.textContent = styleContent;
   }
 
   /**
@@ -236,6 +321,7 @@ class ThemeService {
       purple: '🟣 Violet',
       ash: '⚫ Cendre',
       yellow: '🟡 Jaune',
+      green: '🟢 Vert',
       chromatic: '🌈 Chromatique',
     };
     return labels[scheme];
