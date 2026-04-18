@@ -1,9 +1,6 @@
 -- FIX: Permettre au contrôleur de mettre à jour les réservations
 -- Le contrôleur a besoin de pouvoir valider/annuler les réservations
 
--- D'abord, vérifier l'état actuel des policies
--- SELECT polname, polcmd, polroles FROM pg_policies WHERE tablename = 'reservations';
-
 -- Ajouter une policy pour que les contrôleurs puissent UPDATE les réservations
 DROP POLICY IF EXISTS "Controllers can update reservations" ON reservations;
 CREATE POLICY "Controllers can update reservations" ON reservations
@@ -61,7 +58,7 @@ CREATE POLICY "Admins can view all reservations" ON reservations
   );
 
 -- Debug: Afficher toutes les policies actuelles
-SELECT polname, polcmd, polroles 
+SELECT policyname, cmd, roles 
 FROM pg_policies 
 WHERE tablename = 'reservations'
-ORDER BY polname;
+ORDER BY policyname;

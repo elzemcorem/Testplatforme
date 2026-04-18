@@ -97,10 +97,11 @@ export function ReservationsPage() {
     try {
       console.log("✅ Validation de la réservation:", reservation.id);
       
+      // ⚠️ Important: Envoyer "confirmed" (le trigger le convertit en "validated")
       const updated = await reservationService.updateReservation(
         reservation.id,
         {
-          status: "validated",
+          status: "confirmed",
           validatedBy: currentUser?.name,
         }
       );
