@@ -15,6 +15,8 @@ import { IntelligentHelpPage } from "./IntelligentHelpPage";
 import { LoginPage } from "./LoginPage";
 import { MyReservations } from "./MyReservations";
 import { NotificationBell } from "./NotificationBell";
+import { DAFDashboard } from "./DAFDashboard";
+import { DAFNotificationPanel } from "./DAFNotificationPanel";
 import { useAuth } from "../contexts/AuthContext";
 
 export function Layout() {
@@ -39,7 +41,19 @@ export function Layout() {
   }
 
   const renderContent = () => {
-    const { role } = currentUser;
+    const { role, isDAF } = currentUser;
+
+    // DAF a son propre dashboard spécialisé
+    if (isDAF) {
+      switch (currentPage) {
+        case "dashboard":
+          return <DAFDashboard />;
+        case "settings":
+          return <UserSettings />;
+        default:
+          return <DAFDashboard />;
+      }
+    }
 
     // Admin a accès à tout
     if (role === "admin") {
@@ -120,6 +134,8 @@ export function Layout() {
         <div className="absolute top-4 right-6 z-50">
           <NotificationBell />
         </div>
+        {/* DAF Notification Panel pour temps réel */}
+        <DAFNotificationPanel isDAF={currentUser?.isDAF || false} />
         {renderContent()}
       </main>
     </div>

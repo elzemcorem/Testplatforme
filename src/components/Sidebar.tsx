@@ -77,7 +77,25 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
   const getNavigationItems = () => {
     if (!currentUser) return [];
     
-    const { role } = currentUser;
+    const { role, isDAF } = currentUser;
+    
+    // DAF a son propre menu spécialisé
+    if (isDAF) {
+      return [
+        {
+          id: "dashboard",
+          name: "Dashboard DAF",
+          icon: BarChart3,
+          description: "Suivi temps réel"
+        },
+        {
+          id: "settings",
+          name: "Paramètres",
+          icon: Settings,
+          description: "Vos préférences"
+        }
+      ];
+    }
     
     if (role === "admin") {
       return [

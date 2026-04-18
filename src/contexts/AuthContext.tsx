@@ -101,6 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             status: session.user.user_metadata?.status || 'active',
             isOnline: true,
             lastSeen: new Date(),
+            isDAF: session.user.email === 'daf@beninpetro.com',
           };
 
           setCurrentUser(user);
@@ -247,6 +248,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 status: loginData.user.user_metadata?.status || 'active',
                 isOnline: true,
                 lastSeen: new Date(),
+                isDAF: loginData.user.email === 'daf@beninpetro.com',
               };
 
               setCurrentUser(user);
@@ -286,6 +288,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           status: data.user.user_metadata?.status || 'active',
           isOnline: true,
           lastSeen: new Date(),
+          isDAF: data.user.email === 'daf@beninpetro.com',
         };
 
         setCurrentUser(user);
