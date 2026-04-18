@@ -324,7 +324,7 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
                         : `${colors.primary}15`,
                       color: colors.foreground,
                       boxShadow: isActive && isChromatic
-                        ? `0 4px 12px rgba(${this.hexToRgb(colors.primary)}, 0.3)`
+                        ? `0 4px 12px rgba(${hexToRgb(colors.primary)}, 0.3)`
                         : 'none',
                     }}
                   >
