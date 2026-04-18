@@ -46,18 +46,14 @@ CREATE POLICY "Users can update their own future bookings" ON future_bookings
 DROP POLICY IF EXISTS "DAF can view all future bookings" ON future_bookings;
 CREATE POLICY "DAF can view all future bookings" ON future_bookings
   FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM auth.users WHERE id = auth.uid() AND email = 'daf@beninpetro.com'
-    )
+    auth.jwt()->>'email' = 'daf@beninpetro.com'
   );
 
 -- Policy pour contrôleur
 DROP POLICY IF EXISTS "Controllers can view future bookings" ON future_bookings;
 CREATE POLICY "Controllers can view future bookings" ON future_bookings
   FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM auth.users WHERE id = auth.uid() AND role = 'controller'
-    )
+    auth.jwt()->>'role' = 'controller'
   );
 
 -- Table pour tracker les actions du contrôleur
@@ -89,9 +85,7 @@ CREATE POLICY "Allow inserts for logging" ON controller_actions_log
 DROP POLICY IF EXISTS "DAF can view all controller actions" ON controller_actions_log;
 CREATE POLICY "DAF can view all controller actions" ON controller_actions_log
   FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM auth.users WHERE id = auth.uid() AND email = 'daf@beninpetro.com'
-    )
+    auth.jwt()->>'email' = 'daf@beninpetro.com'
   );
 
 -- Policy pour contrôleur
@@ -103,9 +97,7 @@ CREATE POLICY "Controllers can view their own actions" ON controller_actions_log
 DROP POLICY IF EXISTS "Admin can view and manage actions" ON controller_actions_log;
 CREATE POLICY "Admin can view and manage actions" ON controller_actions_log
   FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM auth.users WHERE id = auth.uid() AND role = 'admin'
-    )
+    auth.jwt()->>'role' = 'admin'
   );
 
 -- TRIGGER FUNCTION
@@ -154,28 +146,20 @@ EXECUTE FUNCTION log_controller_action();
 DROP POLICY IF EXISTS "Controllers can update reservations" ON reservations;
 CREATE POLICY "Controllers can update reservations" ON reservations
   FOR UPDATE USING (
-    EXISTS (
-      SELECT 1 FROM auth.users WHERE id = auth.uid() AND role = 'controller'
-    )
+    auth.jwt()->>'role' = 'controller'
   )
   WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM auth.users WHERE id = auth.uid() AND role = 'controller'
-    )
+    auth.jwt()->>'role' = 'controller'
   );
 
 -- Admins peuvent UPDATE
 DROP POLICY IF EXISTS "Admins can update reservations" ON reservations;
 CREATE POLICY "Admins can update reservations" ON reservations
   FOR UPDATE USING (
-    EXISTS (
-      SELECT 1 FROM auth.users WHERE id = auth.uid() AND role = 'admin'
-    )
+    auth.jwt()->>'role' = 'admin'
   )
   WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM auth.users WHERE id = auth.uid() AND role = 'admin'
-    )
+    auth.jwt()->>'role' = 'admin'
   );
 
 -- ==========================================
