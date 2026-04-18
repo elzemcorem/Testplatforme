@@ -69,9 +69,9 @@ LIMIT 5;
 -- 8️⃣ Vérifier les réservations avec contrôleur
 -- ========================================
 SELECT '8️⃣ RESERVATIONS (dernières validées)' as diagnostic;
-SELECT id, status, validatedBy, updated_at
+SELECT id, status, validated_by, updated_at
 FROM reservations
-WHERE status = 'confirmed' OR validatedBy IS NOT NULL
+WHERE status = 'confirmed' OR validated_by IS NOT NULL
 ORDER BY updated_at DESC
 LIMIT 5;
 
