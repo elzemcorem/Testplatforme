@@ -124,12 +124,10 @@ class FutureBookingsService {
    */
   async getUserFutureBookings(userId: string): Promise<FutureBooking[]> {
     try {
+      // Requête simplifiée sans relations (PostgREST a du mal avec certaines FK)
       const { data, error } = await this.supabase
         .from('future_bookings')
-        .select(`
-          *,
-          vehicle:vehicle_id(model, registration_number)
-        `)
+        .select('*')
         .eq('user_id', userId)
         .order('planned_start_date', { ascending: true });
 
@@ -146,13 +144,10 @@ class FutureBookingsService {
    */
   async getAllFutureBookings(): Promise<FutureBooking[]> {
     try {
+      // Requête simplifiée sans relations (PostgREST a du mal avec auth.users)
       const { data, error } = await this.supabase
         .from('future_bookings')
-        .select(`
-          *,
-          user:user_id(email, name),
-          vehicle:vehicle_id(model, registration_number)
-        `)
+        .select('*')
         .order('planned_start_date', { ascending: true });
 
       if (error) throw error;
