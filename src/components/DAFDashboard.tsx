@@ -48,12 +48,28 @@ export function DAFDashboard() {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
+    // Initialiser les listeners Realtime
+    dafRealtimeService.initializeRealtimeListeners();
+    
+    // Charger les données initiales
     loadDashboardData();
+    
+    // Ajouter un listener pour les notifications en temps réel
+    const handleNotification = () => {
+      // Recharger les données quand une notification arrive
+      loadDashboardData();
+    };
+    
+    dafRealtimeService.onNotification(handleNotification);
     
     // Rafraîchir automatiquement toutes les 30 secondes
     const interval = setInterval(loadDashboardData, 30000);
     
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      dafRealtimeService.offNotification(handleNotification);
+      dafRealtimeService.unsubscribeAll();
+    };
   }, []);
 
   const loadDashboardData = async () => {

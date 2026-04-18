@@ -47,7 +47,16 @@ export function ReservationCalendar({
 
   useEffect(() => {
     loadBookings();
-  }, []);
+  }, [showFutureOnly]);
+
+  // Mettre à jour quand les props changent
+  useEffect(() => {
+    if (futureBookings && futureBookings.length > 0) {
+      setFilteredBookings(futureBookings);
+    } else if (showFutureOnly) {
+      loadBookings();
+    }
+  }, [futureBookings, showFutureOnly]);
 
   const loadBookings = async () => {
     if (showFutureOnly) {
