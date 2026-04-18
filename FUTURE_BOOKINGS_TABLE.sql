@@ -73,6 +73,11 @@ CREATE INDEX IF NOT EXISTS idx_controller_actions_timestamp ON controller_action
 -- Enable RLS
 ALTER TABLE controller_actions_log ENABLE ROW LEVEL SECURITY;
 
+-- Policy pour INSÉRER les logs (utilisé par le trigger automatique)
+DROP POLICY IF EXISTS "Allow inserts for logging" ON controller_actions_log;
+CREATE POLICY "Allow inserts for logging" ON controller_actions_log
+  FOR INSERT WITH CHECK (true);
+
 -- Policy pour DAF (voir TOUT)
 DROP POLICY IF EXISTS "DAF can view all controller actions" ON controller_actions_log;
 CREATE POLICY "DAF can view all controller actions" ON controller_actions_log
@@ -87,32 +92,49 @@ DROP POLICY IF EXISTS "Controllers can view their own actions" ON controller_act
 CREATE POLICY "Controllers can view their own actions" ON controller_actions_log
   FOR SELECT USING (controller_id = auth.uid());
 
+-- Policy pour Admin (voir tout et supprimer si nécessaire)
+DROP POLICY IF EXISTS "Admin can view and manage actions" ON controller_actions_log;
+CREATE POLICY "Admin can view and manage actions" ON controller_actions_log
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM auth.users WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
 -- Trigger pour enregistrer les actions du contrôleur automatiquement
 CREATE OR REPLACE FUNCTION log_controller_action()
 RETURNS TRIGGER AS $$
 BEGIN
-  IF NEW.status != OLD.status THEN
-    INSERT INTO controller_actions_log (
-      controller_id, 
-      reservation_id, 
-      action_type, 
-      old_status, 
-      new_status
-    ) VALUES (
-      auth.uid(),
-      NEW.id,
-      CASE 
-        WHEN NEW.status = 'confirmed' THEN 'validated'
-        WHEN NEW.status = 'cancelled' THEN 'cancelled'
-        ELSE 'modified'
-      END,
-      OLD.status,
-      NEW.status
-    );
+  -- Enregistrer le changement de statut
+  IF NEW.status IS DISTINCT FROM OLD.status THEN
+    BEGIN
+      INSERT INTO controller_actions_log (
+        controller_id, 
+        reservation_id, 
+        action_type, 
+        old_status, 
+        new_status,
+        timestamp
+      ) VALUES (
+        COALESCE(auth.uid(), '00000000-0000-0000-0000-000000000000'::uuid),
+        NEW.id,
+        CASE 
+          WHEN NEW.status = 'confirmed' THEN 'validated'
+          WHEN NEW.status = 'cancelled' THEN 'cancelled'
+          ELSE 'modified'
+        END,
+        OLD.status,
+        NEW.status,
+        now()
+      );
+    EXCEPTION WHEN OTHERS THEN
+      -- Log l'erreur mais ne pas arrêter le trigger
+      RAISE WARNING 'Error logging controller action: %', SQLERRM;
+    END;
   END IF;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- Drop trigger si existe
 DROP TRIGGER IF EXISTS trg_log_controller_action ON reservations;
