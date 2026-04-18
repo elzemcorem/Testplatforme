@@ -14,25 +14,29 @@ CREATE TABLE IF NOT EXISTS future_bookings (
   CONSTRAINT planned_dates_valid CHECK (planned_end_date > planned_start_date)
 );
 
-CREATE INDEX idx_future_bookings_user_id ON future_bookings(user_id);
-CREATE INDEX idx_future_bookings_vehicle_id ON future_bookings(vehicle_id);
-CREATE INDEX idx_future_bookings_status ON future_bookings(status);
-CREATE INDEX idx_future_bookings_planned_dates ON future_bookings(planned_start_date, planned_end_date);
+CREATE INDEX IF NOT EXISTS idx_future_bookings_user_id ON future_bookings(user_id);
+CREATE INDEX IF NOT EXISTS idx_future_bookings_vehicle_id ON future_bookings(vehicle_id);
+CREATE INDEX IF NOT EXISTS idx_future_bookings_status ON future_bookings(status);
+CREATE INDEX IF NOT EXISTS idx_future_bookings_planned_dates ON future_bookings(planned_start_date, planned_end_date);
 
 -- Enable RLS
 ALTER TABLE future_bookings ENABLE ROW LEVEL SECURITY;
 
 -- Policy pour les utilisateurs normaux (voir leurs propres réservations planifiées)
+DROP POLICY IF EXISTS "Users can view their own future bookings" ON future_bookings;
 CREATE POLICY "Users can view their own future bookings" ON future_bookings
   FOR SELECT USING (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can create their own future bookings" ON future_bookings;
 CREATE POLICY "Users can create their own future bookings" ON future_bookings
   FOR INSERT WITH CHECK (user_id = auth.uid());
 
+DROP POLICY IF EXISTS "Users can update their own future bookings" ON future_bookings;
 CREATE POLICY "Users can update their own future bookings" ON future_bookings
   FOR UPDATE USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
 -- Policy pour DAF (voir TOUTES les réservations planifiées)
+DROP POLICY IF EXISTS "DAF can view all future bookings" ON future_bookings;
 CREATE POLICY "DAF can view all future bookings" ON future_bookings
   FOR SELECT USING (
     EXISTS (
@@ -41,6 +45,7 @@ CREATE POLICY "DAF can view all future bookings" ON future_bookings
   );
 
 -- Policy pour contrôleur (voir les réservations planifiées pertinentes)
+DROP POLICY IF EXISTS "Controllers can view future bookings" ON future_bookings;
 CREATE POLICY "Controllers can view future bookings" ON future_bookings
   FOR SELECT USING (
     EXISTS (
@@ -61,14 +66,15 @@ CREATE TABLE IF NOT EXISTS controller_actions_log (
   created_at TIMESTAMP DEFAULT now()
 );
 
-CREATE INDEX idx_controller_actions_controller_id ON controller_actions_log(controller_id);
-CREATE INDEX idx_controller_actions_reservation_id ON controller_actions_log(reservation_id);
-CREATE INDEX idx_controller_actions_timestamp ON controller_actions_log(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_controller_actions_controller_id ON controller_actions_log(controller_id);
+CREATE INDEX IF NOT EXISTS idx_controller_actions_reservation_id ON controller_actions_log(reservation_id);
+CREATE INDEX IF NOT EXISTS idx_controller_actions_timestamp ON controller_actions_log(timestamp DESC);
 
 -- Enable RLS
 ALTER TABLE controller_actions_log ENABLE ROW LEVEL SECURITY;
 
 -- Policy pour DAF (voir TOUT)
+DROP POLICY IF EXISTS "DAF can view all controller actions" ON controller_actions_log;
 CREATE POLICY "DAF can view all controller actions" ON controller_actions_log
   FOR SELECT USING (
     EXISTS (
@@ -77,6 +83,7 @@ CREATE POLICY "DAF can view all controller actions" ON controller_actions_log
   );
 
 -- Policy pour contrôleur (voir ses propres actions)
+DROP POLICY IF EXISTS "Controllers can view their own actions" ON controller_actions_log;
 CREATE POLICY "Controllers can view their own actions" ON controller_actions_log
   FOR SELECT USING (controller_id = auth.uid());
 

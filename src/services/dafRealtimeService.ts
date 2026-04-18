@@ -52,87 +52,112 @@ class DAFRealtimeService {
    * Initialiser les souscriptions Realtime pour le DAF
    */
   initializeRealtimeListeners(): void {
-    // Écouter les actions du contrôleur
-    this.subscribeToControllerActions();
-    
-    // Écouter les nouvelles réservations planifiées
-    this.subscribeToFutureBookings();
-    
-    // Écouter les changements de statut des réservations
-    this.subscribeToReservationChanges();
+    try {
+      console.log('[DAFRealtimeService] Initializing realtime listeners');
+      // Écouter les actions du contrôleur
+      this.subscribeToControllerActions();
+      
+      // Écouter les nouvelles réservations planifiées
+      this.subscribeToFutureBookings();
+      
+      // Écouter les changements de statut des réservations
+      this.subscribeToReservationChanges();
+      console.log('[DAFRealtimeService] Realtime listeners initialized successfully');
+    } catch (error) {
+      console.error('[DAFRealtimeService] Error initializing realtime listeners:', error);
+      // Ne pas lancer d'erreur, continuer sans les listeners
+    }
   }
 
   /**
    * S'abonner aux actions du contrôleur
    */
   private subscribeToControllerActions(): void {
-    const subscription = this.supabase
-      .channel('controller_actions')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'controller_actions_log'
-        },
-        (payload) => {
-          const action = payload.new as ControllerAction;
-          this.handleControllerAction(action);
-        }
-      )
-      .subscribe();
+    try {
+      const subscription = this.supabase
+        .channel('controller_actions')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'controller_actions_log'
+          },
+          (payload) => {
+            const action = payload.new as ControllerAction;
+            this.handleControllerAction(action);
+          }
+        )
+        .subscribe((status) => {
+          console.log('[DAFRealtimeService] Controller actions subscription status:', status);
+        });
 
-    this.subscriptions.push(subscription);
+      this.subscriptions.push(subscription);
+    } catch (error) {
+      console.error('[DAFRealtimeService] Error subscribing to controller actions:', error);
+    }
   }
 
   /**
    * S'abonner aux futures bookings
    */
   private subscribeToFutureBookings(): void {
-    const subscription = this.supabase
-      .channel('future_bookings')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'future_bookings'
-        },
-        (payload) => {
-          const booking = payload.new as FutureBooking;
-          this.handleFutureBooking(payload.eventType, booking);
-        }
-      )
-      .subscribe();
+    try {
+      const subscription = this.supabase
+        .channel('future_bookings')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'future_bookings'
+          },
+          (payload) => {
+            const booking = payload.new as FutureBooking;
+            this.handleFutureBooking(payload.eventType, booking);
+          }
+        )
+        .subscribe((status) => {
+          console.log('[DAFRealtimeService] Future bookings subscription status:', status);
+        });
 
-    this.subscriptions.push(subscription);
+      this.subscriptions.push(subscription);
+    } catch (error) {
+      console.error('[DAFRealtimeService] Error subscribing to future bookings:', error);
+    }
   }
 
   /**
    * S'abonner aux changements des réservations
    */
   private subscribeToReservationChanges(): void {
-    const subscription = this.supabase
-      .channel('reservations_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'reservations'
-        },
-        (payload) => {
-          const oldStatus = payload.old.status;
-          const newStatus = payload.new.status;
-          
-          if (oldStatus !== newStatus) {
-            this.handleReservationStatusChange(payload.new, oldStatus, newStatus);
+    try {
+      const subscription = this.supabase
+        .channel('reservations_changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'reservations'
+          },
+          (payload) => {
+            const oldStatus = payload.old.status;
+            const newStatus = payload.new.status;
+            
+            if (oldStatus !== newStatus) {
+              this.handleReservationStatusChange(payload.new, oldStatus, newStatus);
+            }
           }
-        }
-      )
-      .subscribe();
+        )
+        .subscribe((status) => {
+          console.log('[DAFRealtimeService] Reservations subscription status:', status);
+        });
 
-    this.subscriptions.push(subscription);
+      this.subscriptions.push(subscription);
+    } catch (error) {
+      console.error('[DAFRealtimeService] Error subscribing to reservation changes:', error);
+    }
   }
 
   /**

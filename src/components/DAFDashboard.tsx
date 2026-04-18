@@ -45,57 +45,76 @@ export function DAFDashboard() {
   
   const [recentActions, setRecentActions] = useState<ControllerAction[]>([]);
   const [futureBookings, setFutureBookings] = useState<FutureBooking[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Initialiser les listeners Realtime
-    dafRealtimeService.initializeRealtimeListeners();
+    console.log('[DAFDashboard] Initializing DAF Dashboard');
     
-    // Charger les données initiales
-    loadDashboardData();
-    
-    // Ajouter un listener pour les notifications en temps réel
-    const handleNotification = () => {
-      // Recharger les données quand une notification arrive
+    try {
+      // Initialiser les listeners Realtime
+      console.log('[DAFDashboard] Initializing Realtime listeners');
+      dafRealtimeService.initializeRealtimeListeners();
+      
+      // Charger les données initiales
       loadDashboardData();
-    };
-    
-    dafRealtimeService.onNotification(handleNotification);
-    
-    // Rafraîchir automatiquement toutes les 30 secondes
-    const interval = setInterval(loadDashboardData, 30000);
-    
-    return () => {
-      clearInterval(interval);
-      dafRealtimeService.offNotification(handleNotification);
-      dafRealtimeService.unsubscribeAll();
-    };
+      
+      // Ajouter un listener pour les notifications en temps réel
+      const handleNotification = () => {
+        console.log('[DAFDashboard] Notification received, reloading data');
+        // Recharger les données quand une notification arrive
+        loadDashboardData();
+      };
+      
+      dafRealtimeService.onNotification(handleNotification);
+      
+      // Rafraîchir automatiquement toutes les 30 secondes
+      const interval = setInterval(loadDashboardData, 30000);
+      
+      return () => {
+        clearInterval(interval);
+        dafRealtimeService.offNotification(handleNotification);
+        dafRealtimeService.unsubscribeAll();
+      };
+    } catch (err) {
+      console.error('[DAFDashboard] Error initializing:', err);
+      setError('Erreur lors de l\'initialisation du tableau de bord');
+      setIsLoading(false);
+    }
   }, []);
 
   const loadDashboardData = async () => {
     setIsLoading(true);
+    setError(null);
     try {
+      console.log('[DAFDashboard] Loading controller actions...');
       // Charger les actions récentes
       const actions = await dafRealtimeService.getControllerActionsHistory(20);
-      setRecentActions(actions);
+      console.log('[DAFDashboard] Loaded actions:', actions);
+      setRecentActions(actions || []);
 
+      console.log('[DAFDashboard] Loading future bookings...');
       // Charger les future bookings
       const bookings = await futureBookingsService.getAllFutureBookings();
-      setFutureBookings(bookings);
+      console.log('[DAFDashboard] Loaded bookings:', bookings);
+      setFutureBookings(bookings || []);
 
       // Calculer les stats
       const stats: DAFStats = {
-        totalValidations: actions.filter(a => a.action_type === 'validated').length,
-        totalCancellations: actions.filter(a => a.action_type === 'cancelled').length,
-        totalModifications: actions.filter(a => a.action_type === 'modified').length,
-        totalFutureBookings: bookings.length,
-        pendingBookings: bookings.filter(b => b.status === 'pending').length
+        totalValidations: (actions || []).filter(a => a.action_type === 'validated').length,
+        totalCancellations: (actions || []).filter(a => a.action_type === 'cancelled').length,
+        totalModifications: (actions || []).filter(a => a.action_type === 'modified').length,
+        totalFutureBookings: (bookings || []).length,
+        pendingBookings: (bookings || []).filter(b => b.status === 'pending').length
       };
       
+      console.log('[DAFDashboard] Stats:', stats);
       setStats(stats);
     } catch (error) {
-      console.error('Error loading DAF dashboard:', error);
-      toast.error('Erreur lors du chargement des données');
+      console.error('[DAFDashboard] Error loading DAF dashboard:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Erreur inconnue';
+      setError(`Erreur: ${errorMsg}`);
+      // Ne pas afficher de toast ici, le composant affichera le message
     } finally {
       setIsLoading(false);
     }
@@ -129,6 +148,40 @@ export function DAFDashboard() {
 
   return (
     <div className="space-y-6 bg-background min-h-screen p-6">
+      {/* Afficher le loader au chargement initial */}
+      {isLoading && recentActions.length === 0 && futureBookings.length === 0 && (
+        <div className="min-h-96 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Chargement du tableau de bord DAF...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Afficher le message d'erreur s'il y en a */}
+      {error && (
+        <Card className="border-2 border-red-300 bg-red-50 dark:bg-red-950/20">
+          <CardHeader>
+            <CardTitle className="text-red-700 flex items-center gap-2">
+              <AlertCircle className="w-5 h-5" />
+              Erreur
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-red-600 dark:text-red-400">{error}</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              ⚠️ Assurez-vous que les tables Supabase sont créées en exécutant le SQL dans Supabase Dashboard.
+            </p>
+            <Button onClick={loadDashboardData} className="mt-4" variant="outline">
+              Réessayer
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Afficher le contenu si données chargées ou pas d'erreur */}
+      {!error && (
+        <>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -324,6 +377,8 @@ export function DAFDashboard() {
             </div>
           </CardContent>
         </Card>
+      )}
+        </>
       )}
     </div>
   );
