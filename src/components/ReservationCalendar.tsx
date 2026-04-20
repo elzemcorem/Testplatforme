@@ -27,7 +27,7 @@ interface FutureBooking {
   planned_end_date: string;
   status: string;
   vehicle: { model: string; registration_number: string };
-  user: { email: string; name: string };
+  user?: { email: string; name: string };
 }
 
 interface ReservationCalendarProps {

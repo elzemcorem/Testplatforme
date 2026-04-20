@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { format } from 'date-fns';
+import { format, differenceInDays, isToday, isTomorrow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import {
   BarChart3,
@@ -15,7 +15,10 @@ import {
   TrendingUp,
   Users,
   Activity,
-  RefreshCw
+  RefreshCw,
+  Wifi,
+  WifiOff,
+  Calendar as CalendarIcon
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
@@ -25,6 +28,7 @@ import { ReservationCalendar } from './ReservationCalendar';
 import { dafRealtimeService, type ControllerAction } from '../services/dafRealtimeService';
 import { futureBookingsService, type FutureBooking } from '../services/futureBookingsService';
 import { vehicleService } from '../services/vehicleService';
+import { supabase } from '../utils/supabase/client';
 import { toast } from 'sonner@2.0.3';
 
 interface Vehicle {
@@ -34,8 +38,14 @@ interface Vehicle {
   registration_number?: string;
 }
 
+interface User {
+  name: string;
+  email: string;
+}
+
 interface EnrichedFutureBooking extends FutureBooking {
   vehicle?: Vehicle;
+  user?: User;
 }
 
 interface DAFStats {
@@ -59,6 +69,7 @@ export function DAFDashboard() {
   const [futureBookings, setFutureBookings] = useState<EnrichedFutureBooking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isRealtimeConnected, setIsRealtimeConnected] = useState(false);
 
   useEffect(() => {
     console.log('[DAFDashboard] Initializing DAF Dashboard');
@@ -67,6 +78,33 @@ export function DAFDashboard() {
       // Initialiser les listeners Realtime
       console.log('[DAFDashboard] Initializing Realtime listeners');
       dafRealtimeService.initializeRealtimeListeners();
+      
+      // Ajouter un listener Realtime direct pour future_bookings
+      const futureBookingsChannel = supabase
+        .channel('future_bookings_daf')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'future_bookings'
+          },
+          (payload) => {
+            console.log('[DAFDashboard] Realtime update on future_bookings:', payload);
+            setIsRealtimeConnected(true);
+            // Recharger les données immédiatement
+            setTimeout(() => loadDashboardData(), 100);
+          }
+        )
+        .subscribe((status) => {
+          console.log('[DAFDashboard] Future bookings channel status:', status);
+          if (status === 'SUBSCRIBED') {
+            setIsRealtimeConnected(true);
+            toast.success('✅ Connecté en temps réel', { duration: 2000 });
+          } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+            setIsRealtimeConnected(false);
+          }
+        });
       
       // Charger les données initiales
       loadDashboardData();
@@ -80,13 +118,17 @@ export function DAFDashboard() {
       
       dafRealtimeService.onNotification(handleNotification);
       
-      // Rafraîchir automatiquement toutes les 30 secondes
-      const interval = setInterval(loadDashboardData, 30000);
+      // Rafraîchir automatiquement toutes les 30 secondes (fallback)
+      const interval = setInterval(() => {
+        console.log('[DAFDashboard] Polling refresh (30s interval)');
+        loadDashboardData();
+      }, 30000);
       
       return () => {
         clearInterval(interval);
         dafRealtimeService.offNotification(handleNotification);
         dafRealtimeService.unsubscribeAll();
+        futureBookingsChannel.unsubscribe();
       };
     } catch (err) {
       console.error('[DAFDashboard] Error initializing:', err);
@@ -113,7 +155,23 @@ export function DAFDashboard() {
       const vehicles = await vehicleService.loadVehicles();
       const vehiclesMap = new Map(vehicles?.map(v => [v.id, v]) || []);
       
-      // Enrichir les bookings avec les infos des véhicules
+      // Charger les utilisateurs depuis allowed_users pour enrichir les bookings
+      const { data: allowedUsers, error: usersError } = await supabase
+        .from('allowed_users')
+        .select('id, email, noms')
+        .not('id', 'is', null);
+      
+      const usersMap = new Map<string, { name: string; email: string }>();
+      if (allowedUsers && !usersError) {
+        allowedUsers.forEach(user => {
+          usersMap.set(user.id, { 
+            name: user.noms || 'Unknown', 
+            email: user.email 
+          });
+        });
+      }
+      
+      // Enrichir les bookings avec les infos des véhicules ET utilisateurs
       const enrichedBookings = (bookings || []).map(booking => ({
         ...booking,
         vehicle: vehiclesMap.get(booking.vehicle_id) || { 
@@ -121,6 +179,10 @@ export function DAFDashboard() {
           name: 'Véhicule inconnu',
           model: 'N/A',
           registration_number: 'N/A'
+        },
+        user: usersMap.get(booking.user_id) || {
+          name: 'Utilisateur inconnu',
+          email: '—'
         }
       }));
       
@@ -305,7 +367,150 @@ export function DAFDashboard() {
       {/* Calendrier */}
       <ReservationCalendar futureBookings={futureBookings} showFutureOnly={true} />
 
-      {/* Actions Récentes du Contrôleur */}
+      {/* Future Bookings - Tous les statuts avec détails complets */}
+      <Card className="border-2 border-blue-200">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CalendarIcon className="w-5 h-5 text-blue-700" />
+              <div>
+                <CardTitle>Réservations planifiées - Tableau de bord</CardTitle>
+                <CardDescription>
+                  {stats.totalFutureBookings} réservation{stats.totalFutureBookings !== 1 ? 's' : ''} planifiée{stats.totalFutureBookings !== 1 ? 's' : ''} 
+                  {' • '} 
+                  {stats.pendingBookings} en attente {' • '}
+                  <span className={`inline-flex items-center gap-1 ${isRealtimeConnected ? 'text-green-600' : 'text-red-600'}`}>
+                    {isRealtimeConnected ? (
+                      <>
+                        <Wifi className="w-3 h-3" />
+                        Temps réel ✓
+                      </>
+                    ) : (
+                      <>
+                        <WifiOff className="w-3 h-3" />
+                        Polling uniquement
+                      </>
+                    )}
+                  </span>
+                </CardDescription>
+              </div>
+            </div>
+            <Button onClick={loadDashboardData} disabled={isLoading} variant="outline" size="sm">
+              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              Actualiser
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {futureBookings.length === 0 ? (
+            <div className="text-center py-8">
+              <CalendarIcon className="w-12 h-12 text-muted-foreground opacity-20 mx-auto mb-2" />
+              <p className="text-muted-foreground">Aucune réservation planifiée</p>
+            </div>
+          ) : (
+            <div className="space-y-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Véhicule</TableHead>
+                      <TableHead>Dates</TableHead>
+                      <TableHead>Durée</TableHead>
+                      <TableHead>Utilisateur</TableHead>
+                      <TableHead>Statut</TableHead>
+                      <TableHead>Prochaines étapes</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {futureBookings.map(booking => {
+                      const startDate = new Date(booking.planned_start_date);
+                      const endDate = new Date(booking.planned_end_date);
+                      const days = differenceInDays(endDate, startDate) + 1;
+                      const vehicleName = booking.vehicle?.model || booking.vehicle?.name || 'Véhicule inconnu';
+                      const registrationNumber = booking.vehicle?.registration_number || 'N/A';
+                      
+                      let dateLabel = '';
+                      if (isToday(startDate)) {
+                        dateLabel = 'Aujourd\'hui';
+                      } else if (isTomorrow(startDate)) {
+                        dateLabel = 'Demain';
+                      } else {
+                        dateLabel = format(startDate, 'dd MMM', { locale: fr });
+                      }
+                      
+                      const getStatusBadge = () => {
+                        switch (booking.status) {
+                          case 'pending':
+                            return <Badge className="bg-yellow-100 text-yellow-800">⏳ En attente</Badge>;
+                          case 'confirmed':
+                            return <Badge className="bg-green-100 text-green-800">✅ Confirmée</Badge>;
+                          case 'cancelled':
+                            return <Badge className="bg-red-100 text-red-800">❌ Annulée</Badge>;
+                          case 'started':
+                            return <Badge className="bg-blue-100 text-blue-800">▶️ En cours</Badge>;
+                          case 'completed':
+                            return <Badge className="bg-gray-100 text-gray-800">✓ Terminée</Badge>;
+                          default:
+                            return <Badge variant="outline">{booking.status}</Badge>;
+                        }
+                      };
+                      
+                      const getNextStep = () => {
+                        if (booking.status === 'pending') {
+                          return '👤 Contrôleur doit valider';
+                        } else if (booking.status === 'confirmed' && startDate > new Date()) {
+                          return '⏰ En attente du début';
+                        } else if (booking.status === 'confirmed' && startDate <= new Date()) {
+                          return '▶️ Doit être marquée "En cours"';
+                        } else if (booking.status === 'started') {
+                          return '🏁 En attente de fin';
+                        }
+                        return '—';
+                      };
+                      
+                      return (
+                        <TableRow key={booking.id} className="hover:bg-muted/50">
+                          <TableCell>
+                            <div className="text-sm">
+                              <div className="font-medium">{vehicleName}</div>
+                              <div className="text-xs text-muted-foreground">{registrationNumber}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              <div>{dateLabel}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {format(startDate, 'HH:mm')} → {format(endDate, 'HH:mm')}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs">
+                              {days} jour{days > 1 ? 's' : ''}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              <div className="font-medium">{booking.user?.name || '—'}</div>
+                              <div className="text-xs text-muted-foreground">{booking.user?.email || '—'}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell>{getStatusBadge()}</TableCell>
+                          <TableCell>
+                            <div className="text-xs text-muted-foreground">
+                              {getNextStep()}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
       <Card className="border-2 border-primary/20">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -367,51 +572,7 @@ export function DAFDashboard() {
         </CardContent>
       </Card>
 
-      {/* Future Bookings En Attente */}
-      {stats.pendingBookings > 0 && (
-        <Card className="border-2 border-yellow-200 bg-yellow-50/50 dark:bg-yellow-950/20">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-yellow-700">
-              <AlertCircle className="w-5 h-5" />
-              Réservations planifiées en attente
-            </CardTitle>
-            <CardDescription>
-              {stats.pendingBookings} réservation{stats.pendingBookings > 1 ? 's' : ''} à confirmer
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {futureBookings
-                .filter(b => b.status === 'pending')
-                .slice(0, 5)
-                .map(booking => {
-                  const vehicleName = booking.vehicle?.model || booking.vehicle?.name || 'Véhicule inconnu';
-                  const registrationNumber = booking.vehicle?.registration_number || 'N/A';
-                  
-                  return (
-                    <div
-                      key={booking.id}
-                      className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded border border-yellow-200"
-                    >
-                      <div className="text-sm">
-                        <div className="font-medium">
-                          {vehicleName} ({registrationNumber})
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {format(new Date(booking.planned_start_date), 'dd MMM yyyy')} → {format(new Date(booking.planned_end_date), 'dd MMM yyyy')}
-                        </div>
-                      </div>
-                      <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
-                        En attente
-                      </Badge>
-                    </div>
-                  );
-                })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-        </>
+      </>
       )}
     </div>
   );
