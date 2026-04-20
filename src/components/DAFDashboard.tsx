@@ -29,7 +29,7 @@ import { dafRealtimeService, type ControllerAction } from '../services/dafRealti
 import { futureBookingsService, type FutureBooking } from '../services/futureBookingsService';
 import { vehicleService } from '../services/vehicleService';
 import { supabase } from '../utils/supabase/client';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface Vehicle {
   id: string;
