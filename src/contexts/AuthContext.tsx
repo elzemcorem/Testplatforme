@@ -3,6 +3,7 @@ import { User } from "../types";
 import { determineUserRole, getInitials, getNameFromEmail, checkAllowedUser } from "../utils/auth";
 import { supabase } from "../utils/supabase/client";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
+import { SessionAccountsManager, type SessionAccount } from "../services/sessionAccountsManager";
 
 interface AuthContextType {
   currentUser: User | null;
@@ -20,42 +21,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [allAccounts, setAllAccounts] = useState<User[]>([]);
 
-  // Charger tous les utilisateurs autorisés depuis Supabase
-  const loadAllUsers = async () => {
+  // Charger les comptes de session (temporaires + sauvegardés)
+  const loadSessionAccounts = () => {
     try {
-      console.log('🔄 Chargement des utilisateurs depuis Supabase...');
+      console.log('🔄 Loading session and saved accounts...');
       
-      const { data, error } = await supabase
-        .from('allowed_users')
-        .select('id, noms, email, role')
-        .order('noms', { ascending: true });
-
-      if (error) {
-        console.error('❌ Erreur lors du chargement des utilisateurs:', error);
-        return;
-      }
-
-      const users = (data || []).map((row: any) => ({
-        id: row.email || '', // Utiliser l'email comme ID pour les conversations
-        email: row.email || '',
-        name: row.noms || getNameFromEmail(row.email || ''),
-        role: row.role || 'user',
-        initials: getInitials(row.noms || ''),
+      // Récupérer tous les comptes de session et sauvegardés
+      const sessionAccounts = SessionAccountsManager.getSessionAccounts();
+      
+      // Convertir en User objects
+      const users = sessionAccounts.map(account => ({
+        id: account.email,
+        email: account.email,
+        name: account.name,
+        role: account.role as any,
+        initials: account.initials,
         status: 'active',
         isOnline: true,
         lastSeen: new Date(),
       }));
 
       setAllAccounts(users);
-      console.log(`✅ ${users.length} utilisateurs chargés depuis Supabase`);
+      console.log(`✅ ${users.length} session/saved accounts loaded`);
     } catch (error) {
-      console.error('❌ Exception lors du chargement des utilisateurs:', error);
+      console.error('❌ Error loading session accounts:', error);
     }
   };
 
-  // Charger tous les utilisateurs quand l'app démarre ou quand l'utilisateur se connecte
+  // Charger les comptes de session au démarrage ou quand l'utilisateur change
   useEffect(() => {
-    loadAllUsers();
+    loadSessionAccounts();
   }, [currentUser]);
 
   // Charger l'utilisateur depuis la session Supabase au démarrage
