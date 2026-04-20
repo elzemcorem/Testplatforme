@@ -9,6 +9,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { toast } from "sonner";
 import { cn } from "./ui/utils";
 import { chatService } from "../services/chatService";
+import { presenceService } from "../services/presenceService";
 
 interface Message {
   id: string;
@@ -44,31 +45,59 @@ export function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Initialiser le service au montage
+  // Initialiser le service au montage et gérer la présence
   useEffect(() => {
     const init = async () => {
       try {
         await chatService.initialize?.();
+        
+        // Marquer l'utilisateur comme en ligne
+        if (currentUser) {
+          await presenceService.markOnline({
+            id: currentUser.id,
+            email: currentUser.email,
+            name: currentUser.name,
+            initials: currentUser.initials,
+            role: currentUser.role,
+          });
+        }
       } catch (error) {
         console.error("Erreur lors de l'initialisation du chat:", error);
       }
     };
     init();
-  }, []);
-
-  // Charger les utilisateurs connectés
-  useEffect(() => {
-    loadOnlineUsers();
-    const interval = setInterval(loadOnlineUsers, 2000);
-    return () => clearInterval(interval);
+    
+    // Marquer comme hors ligne au démontage
+    return () => {
+      presenceService.markOffline();
+    };
   }, [currentUser]);
 
-  const loadOnlineUsers = () => {
-    const allAccounts = getAllAccounts();
-    // Filtrer pour ne pas inclure l'utilisateur actuel
-    const others = allAccounts.filter((user: UserAccount) => user.id !== currentUser?.id);
-    setOnlineUsers(others);
-  };
+  // Charger les utilisateurs connectés en temps réel
+  useEffect(() => {
+    const loadOnlineUsers = async () => {
+      try {
+        const users = await presenceService.getOnlineUsers();
+        // Filtrer pour ne pas inclure l'utilisateur actuel
+        const others = users.filter((user) => user.email !== currentUser?.email);
+        setOnlineUsers(others as any);
+      } catch (error) {
+        console.error("Erreur lors du chargement des utilisateurs en ligne:", error);
+      }
+    };
+
+    // Charger initialement
+    loadOnlineUsers();
+
+    // S'abonner aux changements de présence
+    const unsubscribe = presenceService.subscribeToPresence((users) => {
+      // Filtrer pour ne pas inclure l'utilisateur actuel
+      const others = users.filter((user) => user.email !== currentUser?.email);
+      setOnlineUsers(others as any);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
 
   // Charger les messages et configurer Realtime
   useEffect(() => {
@@ -130,9 +159,9 @@ export function Chat() {
     scrollToBottom();
   }, [messages, selectedConversation]);
 
-  // Générer l'ID de conversation entre deux utilisateurs
-  const getConversationId = (userId1: string, userId2: string) => {
-    return [userId1, userId2].sort().join("_");
+  // Générer l'ID de conversation entre deux utilisateurs (utiliser email pour cohérence)
+  const getConversationId = (userEmail1: string, userEmail2: string) => {
+    return [userEmail1, userEmail2].sort().join("_");
   };
 
   // Filtrer les messages pour la conversation sélectionnée
@@ -141,11 +170,7 @@ export function Chat() {
       return msg.receiverId === null;
     }
     // Pour les conversations privées, vérifier que le message appartient à cette conversation
-    // et que l'utilisateur actuel est soit l'expéditeur soit le destinataire
-    return (
-      msg.conversationId === selectedConversation &&
-      (msg.senderId === currentUser?.email || msg.receiverId === currentUser?.email)
-    );
+    return msg.conversationId === selectedConversation;
   });
 
   // Envoyer un message
@@ -261,7 +286,8 @@ export function Chat() {
                     </div>
                   ) : (
                     onlineUsers.map((user) => {
-                      const isSelected = selectedConversation === getConversationId(currentUser!.id, user.id);
+                      const convId = getConversationId(currentUser!.email, user.email);
+                      const isSelected = selectedConversation === convId;
                       return (
                         <div
                           key={user.id}
@@ -331,7 +357,7 @@ export function Chat() {
                   </div>
                 ) : (
                   filteredMessages.map((message) => {
-                    const isOwnMessage = message.senderId === currentUser?.id;
+                    const isOwnMessage = message.senderId === currentUser?.email;
                     return (
                       <div
                         key={message.id}
