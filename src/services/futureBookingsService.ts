@@ -300,25 +300,54 @@ class FutureBookingsService {
     try {
       console.log(`[FutureBookingsService] Updating booking ${bookingId} to status: ${status}`);
 
+      // D'abord vérifier que le booking existe
+      const { data: existingBooking, error: checkError } = await this.supabase
+        .from('future_bookings')
+        .select('id, status, user_id')
+        .eq('id', bookingId)
+        .single();
+
+      if (checkError) {
+        console.error('[FutureBookingsService] Booking not found:', checkError);
+        throw new Error(`Réservation ${bookingId} non trouvée`);
+      }
+
+      if (!existingBooking) {
+        throw new Error(`Réservation ${bookingId} n'existe pas`);
+      }
+
+      console.log('[FutureBookingsService] Booking found:', existingBooking);
+
+      // Ensuite mettre à jour le statut
       const { data, error } = await this.supabase
         .from('future_bookings')
         .update({ status, updated_at: new Date().toISOString() })
-        .eq('id', bookingId)
-        .select()
-        .single();
+        .eq('id', bookingId);
 
       if (error) {
         console.error('[FutureBookingsService] Update error:', error);
+        // PGRST116 = RLS policy bloque l'accès
+        if (error.code === 'PGRST116') {
+          throw new Error('Vous n\'avez pas les droits pour mettre à jour cette réservation. Vérifiez que vous êtes contrôleur et que les RLS policies sont correctes.');
+        }
         throw error;
       }
 
-      console.log('[FutureBookingsService] Update successful:', data);
+      console.log('[FutureBookingsService] Update successful');
       toast.success(status === 'confirmed' ? '✅ Réservation validée' : '❌ Réservation annulée');
       return true;
     } catch (error) {
       console.error('[FutureBookingsService] Error updating booking status:', error);
       const errorMsg = error instanceof Error ? error.message : 'Erreur inconnue';
-      toast.error(`Erreur: ${errorMsg}`);
+      
+      // Message d'erreur différencié selon le type d'erreur
+      if (errorMsg.includes('RLS')) {
+        toast.error(`❌ ${errorMsg}\n💡 Exécutez FIX_RLS_ROLE_CHECK.sql dans Supabase`);
+      } else if (errorMsg.includes('n\'existe pas')) {
+        toast.error(`❌ Réservation non trouvée`);
+      } else {
+        toast.error(`❌ Erreur: ${errorMsg}`);
+      }
       return false;
     }
   }
