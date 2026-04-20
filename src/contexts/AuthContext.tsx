@@ -48,6 +48,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Helper pour ajouter l'utilisateur courant à la session
+  const addCurrentUserToSession = (user: User) => {
+    try {
+      SessionAccountsManager.addSessionAccount({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        initials: user.initials,
+      });
+      console.log(`✅ Current user added to session: ${user.email}`);
+      // Recharger les comptes de session
+      loadSessionAccounts();
+    } catch (error) {
+      console.error('❌ Error adding current user to session:', error);
+    }
+  };
+
   // Charger les comptes de session au démarrage ou quand l'utilisateur change
   useEffect(() => {
     loadSessionAccounts();
@@ -116,8 +134,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error("Error loading user:", error);
         localStorage.removeItem('supabase_session');
       } finally {
-        // Charger tous les utilisateurs depuis Supabase
-        await loadAllUsers();
+        // Charger les comptes de session
+        loadSessionAccounts();
         setIsLoading(false);
       }
     };
@@ -247,6 +265,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               };
 
               setCurrentUser(user);
+              addCurrentUserToSession(user);
               updateLocalAccounts(user);
 
               localStorage.setItem('supabase_session', JSON.stringify({
@@ -287,6 +306,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
 
         setCurrentUser(user);
+        addCurrentUserToSession(user);
         updateLocalAccounts(user);
 
         // Sauvegarder la session
@@ -369,12 +389,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Déconnecter de Supabase
       await supabase.auth.signOut();
       
-      // Nettoyer le localStorage
+      // Nettoyer le localStorage et sessionStorage
       localStorage.removeItem('supabase_session');
+      SessionAccountsManager.clearSessionAccounts();
       
       setCurrentUser(null);
+      setAllAccounts([]);
       
-      console.log('✅ Logged out successfully');
+      console.log('✅ Logged out successfully - session accounts cleared');
     } catch (error) {
       console.error('Error during logout:', error);
     }

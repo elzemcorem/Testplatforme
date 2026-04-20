@@ -237,8 +237,8 @@ export function DAFDashboard() {
   };
 
   return (
-    <div className="space-y-6 bg-background min-h-screen p-6">
-      {/* Afficher le loader au chargement initial */}
+    <div className="bg-background min-h-screen p-4 md:p-6 lg:p-8 space-y-6 overflow-x-hidden">
+      {/* Loading State */}
       {isLoading && recentActions.length === 0 && futureBookings.length === 0 && (
         <div className="min-h-96 flex items-center justify-center">
           <div className="text-center">
@@ -248,7 +248,7 @@ export function DAFDashboard() {
         </div>
       )}
 
-      {/* Afficher le message d'erreur s'il y en a */}
+      {/* Error State */}
       {error && (
         <Card className="border-2 border-red-300 bg-red-50 dark:bg-red-950/20">
           <CardHeader>
@@ -269,31 +269,317 @@ export function DAFDashboard() {
         </Card>
       )}
 
-      {/* Afficher le contenu si données chargées ou pas d'erreur */}
+      {/* Content */}
       {!error && (
         <>
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Dashboard DAF</h1>
-          <p className="text-muted-foreground mt-1">
-            Suivi en temps réel des réservations et actions du contrôleur
-          </p>
-        </div>
-        <Button
-          onClick={loadDashboardData}
-          disabled={isLoading}
-          variant="outline"
-          size="sm"
-        >
-          <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-          Rafraîchir
-        </Button>
-      </div>
+          {/* Header */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl md:text-4xl font-bold text-foreground">Dashboard DAF</h1>
+              <p className="text-muted-foreground mt-1">
+                Suivi en temps réel des réservations et actions du contrôleur
+              </p>
+            </div>
+            <Button
+              onClick={loadDashboardData}
+              disabled={isLoading}
+              variant="outline"
+              size="sm"
+              className="w-fit"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              Rafraîchir
+            </Button>
+          </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <Card className="border-2 border-green-200">
+          {/* Stats Cards - Responsive Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
+            <Card className="border-2 border-green-200 min-h-[120px]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs md:text-sm font-medium text-green-700">
+                  Validées
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div className="text-2xl md:text-3xl font-bold">{stats.totalValidations}</div>
+                  <CheckCircle2 className="w-6 md:w-8 h-6 md:h-8 text-green-600 opacity-20" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-2 border-red-200 min-h-[120px]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs md:text-sm font-medium text-red-700">
+                  Annulées
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div className="text-2xl md:text-3xl font-bold">{stats.totalCancellations}</div>
+                  <XCircle className="w-6 md:w-8 h-6 md:h-8 text-red-600 opacity-20" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-2 border-blue-200 min-h-[120px]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs md:text-sm font-medium text-blue-700">
+                  Modifiées
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div className="text-2xl md:text-3xl font-bold">{stats.totalModifications}</div>
+                  <AlertCircle className="w-6 md:w-8 h-6 md:h-8 text-blue-600 opacity-20" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-2 border-purple-200 min-h-[120px]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs md:text-sm font-medium text-purple-700">
+                  Planifiées
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div className="text-2xl md:text-3xl font-bold">{stats.totalFutureBookings}</div>
+                  <Clock className="w-6 md:w-8 h-6 md:h-8 text-purple-600 opacity-20" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-2 border-yellow-200 min-h-[120px]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs md:text-sm font-medium text-yellow-700">
+                  En attente
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div className="text-2xl md:text-3xl font-bold">{stats.pendingBookings}</div>
+                  <TrendingUp className="w-6 md:w-8 h-6 md:h-8 text-yellow-600 opacity-20" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Calendar - Full Width */}
+          <ReservationCalendar futureBookings={futureBookings} showFutureOnly={true} />
+
+          {/* Bookings Dashboard */}
+          <Card className="border-2 border-blue-200">
+            <CardHeader>
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <CalendarIcon className="w-5 h-5 text-blue-700" />
+                  <div>
+                    <CardTitle>Réservations planifiées - Tableau de bord</CardTitle>
+                    <CardDescription className="mt-1">
+                      {stats.totalFutureBookings} réservation{stats.totalFutureBookings !== 1 ? 's' : ''} planifiée{stats.totalFutureBookings !== 1 ? 's' : ''} 
+                      {' • '} 
+                      {stats.pendingBookings} en attente {' • '}
+                      <span className={`inline-flex items-center gap-1 ${isRealtimeConnected ? 'text-green-600' : 'text-red-600'}`}>
+                        {isRealtimeConnected ? (
+                          <>
+                            <Wifi className="w-3 h-3" />
+                            Temps réel ✓
+                          </>
+                        ) : (
+                          <>
+                            <WifiOff className="w-3 h-3" />
+                            Polling uniquement
+                          </>
+                        )}
+                      </span>
+                    </CardDescription>
+                  </div>
+                </div>
+                <Button onClick={loadDashboardData} disabled={isLoading} variant="outline" size="sm" className="w-full md:w-fit">
+                  <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                  Actualiser
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {futureBookings.length === 0 ? (
+                <div className="text-center py-8">
+                  <CalendarIcon className="w-12 h-12 text-muted-foreground opacity-20 mx-auto mb-2" />
+                  <p className="text-muted-foreground">Aucune réservation planifiée</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto -mx-6 sm:-mx-4">
+                  <div className="px-6 sm:px-4">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="min-w-[150px]">Véhicule</TableHead>
+                          <TableHead className="min-w-[150px]">Dates</TableHead>
+                          <TableHead className="min-w-[80px]">Durée</TableHead>
+                          <TableHead className="min-w-[150px]">Utilisateur</TableHead>
+                          <TableHead className="min-w-[100px]">Statut</TableHead>
+                          <TableHead className="min-w-[150px]">Prochaines étapes</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {futureBookings.map(booking => {
+                          const startDate = new Date(booking.planned_start_date);
+                          const endDate = new Date(booking.planned_end_date);
+                          const days = differenceInDays(endDate, startDate) + 1;
+                          const vehicleName = booking.vehicle?.model || booking.vehicle?.name || 'Véhicule inconnu';
+                          const registrationNumber = booking.vehicle?.registration_number || 'N/A';
+                          
+                          let dateLabel = '';
+                          if (isToday(startDate)) {
+                            dateLabel = 'Aujourd\'hui';
+                          } else if (isTomorrow(startDate)) {
+                            dateLabel = 'Demain';
+                          } else {
+                            dateLabel = format(startDate, 'dd MMM', { locale: fr });
+                          }
+                          
+                          const getStatusBadge = () => {
+                            switch (booking.status) {
+                              case 'pending':
+                                return <Badge className="bg-yellow-100 text-yellow-800">⏳ En attente</Badge>;
+                              case 'confirmed':
+                                return <Badge className="bg-green-100 text-green-800">✅ Confirmée</Badge>;
+                              case 'cancelled':
+                                return <Badge className="bg-red-100 text-red-800">❌ Annulée</Badge>;
+                              case 'started':
+                                return <Badge className="bg-blue-100 text-blue-800">▶️ En cours</Badge>;
+                              case 'completed':
+                                return <Badge className="bg-gray-100 text-gray-800">✓ Terminée</Badge>;
+                              default:
+                                return <Badge variant="outline">{booking.status}</Badge>;
+                            }
+                          };
+                          
+                          const getNextStep = () => {
+                            if (booking.status === 'pending') {
+                              return '👤 Contrôleur doit valider';
+                            } else if (booking.status === 'confirmed' && startDate > new Date()) {
+                              return '⏰ En attente du début';
+                            } else if (booking.status === 'confirmed' && startDate <= new Date()) {
+                              return '▶️ Doit être marquée "En cours"';
+                            } else if (booking.status === 'started') {
+                              return '🏁 En attente de fin';
+                            }
+                            return '—';
+                          };
+                          
+                          return (
+                            <TableRow key={booking.id} className="hover:bg-muted/50">
+                              <TableCell>
+                                <div className="text-sm">
+                                  <div className="font-medium truncate">{vehicleName}</div>
+                                  <div className="text-xs text-muted-foreground truncate">{registrationNumber}</div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="text-sm">
+                                  <div>{dateLabel}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {format(startDate, 'HH:mm')} → {format(endDate, 'HH:mm')}
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="text-xs">
+                                  {days} jour{days > 1 ? 's' : ''}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="text-sm">
+                                  <div className="font-medium truncate">{booking.user?.name || '—'}</div>
+                                  <div className="text-xs text-muted-foreground truncate">{booking.user?.email || '—'}</div>
+                                </div>
+                              </TableCell>
+                              <TableCell>{getStatusBadge()}</TableCell>
+                              <TableCell>
+                                <div className="text-xs text-muted-foreground">
+                                  {getNextStep()}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recent Actions */}
+          <Card className="border-2 border-primary/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="w-5 h-5" />
+                Actions récentes du contrôleur
+              </CardTitle>
+              <CardDescription>
+                Historique des validations, annulations et modifications
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto -mx-6 sm:-mx-4">
+                <div className="px-6 sm:px-4">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="min-w-[120px]">Action</TableHead>
+                        <TableHead className="min-w-[100px]">Ancien statut</TableHead>
+                        <TableHead className="min-w-[100px]">Nouveau statut</TableHead>
+                        <TableHead className="min-w-[150px]">Raison</TableHead>
+                        <TableHead className="min-w-[120px]">Heure</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {recentActions.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center text-muted-foreground py-4">
+                            Aucune action enregistrée
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        recentActions.map(action => (
+                          <TableRow key={action.id} className="hover:bg-muted/50">
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                {getActionIcon(action.action_type)}
+                                <span className="capitalize font-medium">
+                                  {getActionLabel(action.action_type)}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{action.old_status}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{action.new_status}</Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {action.reason || '—'}
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {format(new Date(action.timestamp), 'dd MMM HH:mm', { locale: fr })}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Stats Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
+            <Card className="border-2 border-green-200">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-green-700">
               Validées
