@@ -17,7 +17,7 @@ import {
   Save
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import { getInitials } from "../utils/auth";
 import { themeService, type ColorScheme, colorSchemes } from "../services/themeService";
 

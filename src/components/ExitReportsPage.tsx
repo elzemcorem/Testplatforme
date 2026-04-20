@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 import { Calendar, Download, FileText, Filter, LogOut, Eye } from "lucide-react";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import { format, isAfter, isBefore, isSameDay } from "date-fns";
 import { fr } from "date-fns/locale";
 import { supabase } from "../utils/supabase/client";

@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Download, TrendingUp, Car, Calendar, DollarSign } from "lucide-react";
 import { useState, useEffect, useMemo, useRef, memo } from "react";
 import { reservationService } from "../services/reservationService";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import {
   AreaChart,
   Area,

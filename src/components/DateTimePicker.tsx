@@ -11,13 +11,16 @@ import { cn } from "./ui/utils";
 interface DateTimePickerProps {
   value?: Date;
   onChange?: (date: Date | undefined) => void;
+  date?: Date;
+  setDate?: (date: Date | undefined) => void;
   placeholder?: string;
   minDate?: Date;
 }
 
-export function DateTimePicker({ value, onChange, placeholder = "Choisir une date", minDate }: DateTimePickerProps) {
-  const date = value;
-  const setDate = onChange;
+export function DateTimePicker({ value, onChange, date: propDate, setDate: propSetDate, placeholder = "Choisir une date", minDate }: DateTimePickerProps) {
+  // Support both prop naming conventions
+  const date = value ?? propDate;
+  const setDate = onChange ?? propSetDate;
   const [isOpen, setIsOpen] = useState(false);
 
   const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, "0"));

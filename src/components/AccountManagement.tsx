@@ -13,7 +13,7 @@ import {
 import { Users, Shield, UserCheck, UserX, Ban } from "lucide-react";
 import { User } from "../types";
 import { useAuth } from "../contexts/AuthContext";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 
 export function AccountManagement() {
   const [allUsers, setAllUsers] = useState<User[]>([]);

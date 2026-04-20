@@ -17,7 +17,7 @@ import { Reservation } from "../types";
 import { useAuth } from "../contexts/AuthContext";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import { reservationService } from "../services/reservationService";
 
 export function ReservationsPage() {

@@ -7,7 +7,7 @@ import { ReservationForm } from "./ReservationForm";
 import { useAuth } from "../contexts/AuthContext";
 import { reservationService } from "../services/reservationService";
 import { vehicleService, Vehicle as VehicleType } from "../services/vehicleService";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 
 export function Dashboard() {
   const [filters, setFilters] = useState({});

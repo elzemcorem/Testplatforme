@@ -19,7 +19,7 @@ import {
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { cn } from "./ui/utils";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 
 interface Reservation {
   id: string;

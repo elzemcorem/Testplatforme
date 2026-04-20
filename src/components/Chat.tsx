@@ -6,7 +6,7 @@ import { Avatar } from "./ui/avatar";
 import { ScrollArea } from "./ui/scroll-area";
 import { Send, Users, User as UserIcon } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import { cn } from "./ui/utils";
 import { chatService } from "../services/chatService";
 

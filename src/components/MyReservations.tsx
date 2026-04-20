@@ -6,7 +6,7 @@ import { Calendar, MapPin, FileText, Car, User, Clock, CheckCircle2, XCircle } f
 import { useAuth } from "../contexts/AuthContext";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import { reservationService } from "../services/reservationService";
 import { Reservation } from "../types";
 import {
