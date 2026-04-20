@@ -17,6 +17,7 @@ import { MyReservations } from "./MyReservations";
 import { NotificationBell } from "./NotificationBell";
 import { DAFDashboard } from "./DAFDashboard";
 import { DAFNotificationPanel } from "./DAFNotificationPanel";
+import { FutureBookingsPage } from "./FutureBookingsPage";
 import { useAuth } from "../contexts/AuthContext";
 
 export function Layout() {
@@ -48,6 +49,12 @@ export function Layout() {
       switch (currentPage) {
         case "dashboard":
           return <DAFDashboard />;
+        case "reservations":
+          return <ReservationsPage />;
+        case "exit-reports":
+          return <ExitReportsPage />;
+        case "chat":
+          return <Chat />;
         case "settings":
           return <UserSettings />;
         default:
@@ -62,6 +69,8 @@ export function Layout() {
           return <Dashboard />;
         case "reservations":
           return <ReservationsPage />;
+        case "future-bookings":
+          return <FutureBookingsPage />;
         case "analytics":
           return <ReservationAnalyticsSimple />;
         case "configuration":
@@ -88,6 +97,8 @@ export function Layout() {
           return <Dashboard />;
         case "reservations":
           return <ReservationsPage />;
+        case "future-bookings":
+          return <FutureBookingsPage />;
         case "configuration":
           return <VehicleConfiguration />;
         case "checklist":
@@ -113,6 +124,8 @@ export function Layout() {
         return <Dashboard />;
       case "reservations":
         return <MyReservations />;
+      case "future-bookings":
+        return <FutureBookingsPage />;
       case "chat":
         return <Chat />;
       case "help":

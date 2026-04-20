@@ -16,7 +16,8 @@ import {
   UserPlus,
   CheckSquare,
   ClipboardCheck,
-  HelpCircle
+  HelpCircle,
+  Calendar
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { themeService } from "../services/themeService";
@@ -89,6 +90,24 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
           description: "Suivi temps réel"
         },
         {
+          id: "reservations",
+          name: "Réservations",
+          icon: ClipboardList,
+          description: "Gérer les réservations"
+        },
+        {
+          id: "exit-reports",
+          name: "Rapports de Sortie",
+          icon: FileText,
+          description: "Voir les rapports"
+        },
+        {
+          id: "chat",
+          name: "Chat",
+          icon: MessageSquare,
+          description: "Messages"
+        },
+        {
           id: "settings",
           name: "Paramètres",
           icon: Settings,
@@ -110,6 +129,12 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
           name: "Réservations",
           icon: ClipboardList,
           description: "Voir les réservations"
+        },
+        {
+          id: "future-bookings",
+          name: "Réservations Futures",
+          icon: Calendar,
+          description: "Réserver à l'avance"
         },
         {
           id: "analytics",
@@ -171,6 +196,12 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
           description: "Manage reservations"
         },
         {
+          id: "future-bookings",
+          name: "Réservations Futures",
+          icon: Calendar,
+          description: "Réserver à l'avance"
+        },
+        {
           id: "configuration",
           name: "Configuration",
           icon: Settings,
@@ -228,6 +259,12 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
         name: "Mes Réservations",
         icon: ClipboardList,
         description: "Voir mes réservations"
+      },
+      {
+        id: "future-bookings",
+        name: "Réservations Futures",
+        icon: Calendar,
+        description: "Réserver à l'avance"
       },
       {
         id: "chat",

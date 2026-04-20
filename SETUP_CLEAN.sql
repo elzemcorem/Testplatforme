@@ -1,12 +1,12 @@
--- 🚀 SUPER FICHIER SQL COMPLET
--- À exécuter EN ENTIER dans Supabase SQL Editor (copy-paste tout d'un coup)
--- Durée totale: ~10 secondes
--- Résultat: Système Controller→DAF complètement fonctionnel
+-- SUPER FICHIER SQL COMPLET
+-- A executer EN ENTIER dans Supabase SQL Editor (copy-paste tout d'un coup)
+-- Duree totale: ~10 secondes
+-- Resultat: Systeme Controller→DAF completement fonctionnel
 
 -- ==========================================
--- PART 1: CRÉER LES TABLES + TRIGGER
+-- PART 1: CREER LES TABLES + TRIGGER
 -- ==========================================
--- Table pour les réservations planifiées (futures bookings)
+-- Table pour les reservations planifiees (futures bookings)
 CREATE TABLE IF NOT EXISTS future_bookings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -42,7 +42,7 @@ DROP POLICY IF EXISTS "Users can update their own future bookings" ON future_boo
 CREATE POLICY "Users can update their own future bookings" ON future_bookings
   FOR UPDATE USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
--- Policy pour les utilisateurs de voir les futures bookings autres (pour vérifier la disponibilité)
+-- Policy pour les utilisateurs de voir les futures bookings autres (pour verifier la disponibilite)
 DROP POLICY IF EXISTS "Users can view all future bookings for availability" ON future_bookings;
 CREATE POLICY "Users can view all future bookings for availability" ON future_bookings
   FOR SELECT USING (status != 'cancelled');
@@ -68,14 +68,14 @@ CREATE POLICY "DAF can update future bookings" ON future_bookings
     auth.jwt()->>'email' = 'daf@beninpetro.com'
   );
 
--- Policy pour contrôleur
+-- Policy pour controleur
 DROP POLICY IF EXISTS "Controllers can view future bookings" ON future_bookings;
 CREATE POLICY "Controllers can view future bookings" ON future_bookings
   FOR SELECT USING (
     auth.jwt()->>'role' = 'controller'
   );
 
--- Table pour tracker les actions du contrôleur
+-- Table pour tracker les actions du controleur
 CREATE TABLE IF NOT EXISTS controller_actions_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   controller_id UUID NOT NULL REFERENCES auth.users(id),
@@ -95,7 +95,7 @@ CREATE INDEX IF NOT EXISTS idx_controller_actions_timestamp ON controller_action
 -- Enable RLS
 ALTER TABLE controller_actions_log ENABLE ROW LEVEL SECURITY;
 
--- Policy pour INSÉRER (utilisé par le trigger)
+-- Policy pour INSERER (utilise par le trigger)
 DROP POLICY IF EXISTS "Allow inserts for logging" ON controller_actions_log;
 CREATE POLICY "Allow inserts for logging" ON controller_actions_log
   FOR INSERT WITH CHECK (true);
@@ -107,7 +107,7 @@ CREATE POLICY "DAF can view all controller actions" ON controller_actions_log
     auth.jwt()->>'email' = 'daf@beninpetro.com'
   );
 
--- Policy pour contrôleur
+-- Policy pour controleur
 DROP POLICY IF EXISTS "Controllers can view their own actions" ON controller_actions_log;
 CREATE POLICY "Controllers can view their own actions" ON controller_actions_log
   FOR SELECT USING (controller_id = auth.uid());
@@ -190,27 +190,27 @@ ALTER TYPE reservation_status ADD VALUE IF NOT EXISTS 'in_progress';
 ALTER TYPE reservation_status ADD VALUE IF NOT EXISTS 'active';
 
 -- ==========================================
--- DIAGNOSTIC: Vérifier tout fonctionne
+-- DIAGNOSTIC: Verifier tout fonctionne
 -- ==========================================
-SELECT '✅ CONFIGURATION COMPLÈTE' as status;
+SELECT 'OK CONFIGURATION COMPLETE' as status;
 
-SELECT '📊 ENUM values:' as check_type;
+SELECT 'ENUM values:' as check_type;
 SELECT enumlabel as valid_values
 FROM pg_enum
 JOIN pg_type ON pg_enum.enumtypid = pg_type.oid
 WHERE pg_type.typname = 'reservation_status'
 ORDER BY enumsortorder;
 
-SELECT '📋 TABLES:' as check_type;
+SELECT 'TABLES:' as check_type;
 SELECT table_name FROM information_schema.tables 
 WHERE table_schema = 'public' 
 AND table_name IN ('future_bookings', 'controller_actions_log')
 ORDER BY table_name;
 
-SELECT '🔐 RLS POLICIES (controller_actions_log):' as check_type;
+SELECT 'RLS POLICIES (controller_actions_log):' as check_type;
 SELECT policyname FROM pg_policies WHERE tablename = 'controller_actions_log' ORDER BY policyname;
 
-SELECT '⚡ TRIGGER:' as check_type;
+SELECT 'TRIGGER:' as check_type;
 SELECT trigger_name FROM information_schema.triggers WHERE event_object_table = 'reservations' AND trigger_name = 'trg_log_controller_action';
 
-SELECT '✨ TOUT EST PRÊT!' as final_message;
+SELECT 'TOUT EST PRET!' as final_message;
