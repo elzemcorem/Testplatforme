@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,7 +8,6 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import { DateTimePicker } from "./DateTimePicker";
@@ -55,14 +54,13 @@ const RESERVATION_PURPOSES = [
 ];
 
 interface ReservationFormProps {
-  isOpen: boolean;
-  onClose: () => void;
-  vehicleName: string;
-  vehicleId: string;
+  readonly isOpen: boolean;
+  readonly onClose: () => void;
+  readonly vehicleName: string;
+  readonly vehicleId: string;
 }
 
-export function ReservationForm({ isOpen, onClose, vehicleName, vehicleId }: ReservationFormProps) {
-  const [name, setName] = useState("");
+export function ReservationForm({ isOpen, onClose, vehicleName, vehicleId }: Readonly<ReservationFormProps>) {
   const [destination, setDestination] = useState("");
   const [purpose, setPurpose] = useState("");
   const [needDriver, setNeedDriver] = useState("no");
@@ -70,16 +68,9 @@ export function ReservationForm({ isOpen, onClose, vehicleName, vehicleId }: Res
   const [endDate, setEndDate] = useState<Date>();
   const { currentUser } = useAuth();
 
-  // Pré-remplir le nom automatiquement quand le dialog s'ouvre
-  useEffect(() => {
-    if (isOpen && currentUser?.name && !name) {
-      setName(currentUser.name);
-    }
-  }, [isOpen, currentUser, name]);
-
   const handleSubmit = async () => {
     // Validation simple
-    if (!name || !destination || !purpose || !startDate || !endDate) {
+    if (!destination || !purpose || !startDate || !endDate) {
       toast.error("Veuillez remplir tous les champs obligatoires");
       return;
     }
@@ -108,11 +99,13 @@ export function ReservationForm({ isOpen, onClose, vehicleName, vehicleId }: Res
       return;
     }
 
+    const requesterName = currentUser.name?.trim() || currentUser.email;
+
     // Créer la réservation
     const reservationData: Omit<Reservation, "id" | "createdAt"> = {
       vehicleId,
       vehicleName,
-      userName: name,
+      userName: requesterName,
       userEmail: currentUser.email,
       userId: currentUser.id,
       destination,
@@ -133,7 +126,6 @@ export function ReservationForm({ isOpen, onClose, vehicleName, vehicleId }: Res
         console.log("✅ Reservation created successfully");
         
         // Réinitialiser le formulaire
-        setName("");
         setDestination("");
         setPurpose("");
         setNeedDriver("no");
@@ -165,19 +157,6 @@ export function ReservationForm({ isOpen, onClose, vehicleName, vehicleId }: Res
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
-          {/* Nom */}
-          <div className="grid gap-2">
-            <Label htmlFor="name">
-              Nom complet <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="name"
-              placeholder="Entrez votre nom complet"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-
           {/* Destination */}
           <div className="grid gap-2">
             <Label htmlFor="destination">
