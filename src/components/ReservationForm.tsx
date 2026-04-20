@@ -202,8 +202,8 @@ export function ReservationForm({ isOpen, onClose, vehicleName, vehicleId }: Rea
                 Date de début <span className="text-red-500">*</span>
               </Label>
               <DateTimePicker
-                date={startDate}
-                setDate={setStartDate}
+                value={startDate}
+                onChange={setStartDate}
                 placeholder="Choisir"
               />
             </div>
@@ -213,8 +213,8 @@ export function ReservationForm({ isOpen, onClose, vehicleName, vehicleId }: Rea
                 Date de fin <span className="text-red-500">*</span>
               </Label>
               <DateTimePicker
-                date={endDate}
-                setDate={setEndDate}
+                value={endDate}
+                onChange={setEndDate}
                 placeholder="Choisir"
               />
             </div>
