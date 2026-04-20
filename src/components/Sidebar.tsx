@@ -17,10 +17,14 @@ import {
   CheckSquare,
   ClipboardCheck,
   HelpCircle,
-  Calendar
+  Calendar,
+  Save,
+  Trash2
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { themeService } from "../services/themeService";
+import { SessionAccountsManager } from "../services/sessionAccountsManager";
+import { AddAccountModal } from "./AddAccountModal";
 import {
   Popover,
   PopoverContent,
@@ -28,6 +32,8 @@ import {
 } from "./ui/popover";
 import { Button } from "./ui/button";
 import { Separator } from "./ui/separator";
+import { Badge } from "./ui/badge";
+import { toast } from "sonner";
 
 interface SidebarProps {
   currentPage: string;
@@ -57,12 +63,13 @@ const adjustBrightness = (color: string, percent: number): string => {
 export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showAccountMenu, setShowAccountMenu] = useState(false);
-  const { currentUser, logout, switchAccount, getAllAccounts } = useAuth();
+  const [showAddAccountModal, setShowAddAccountModal] = useState(false);
+  const [accounts, setAccounts] = useState(SessionAccountsManager.getSessionAccounts());
+  
+  const { currentUser, logout, switchAccount } = useAuth();
   const colors = themeService.getCurrentColors();
   const scheme = themeService.getCurrentScheme();
   const isChromatic = scheme === 'chromatic';
-
-  const allAccounts = getAllAccounts();
 
   const handleNavigationClick = (pageId: string) => {
     if (!isExpanded) {
@@ -541,36 +548,79 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
                 
                 <Separator className="my-2" />
                 
-                {/* Tous les comptes connectés */}
-                {allAccounts.length > 1 && (
+                {/* Comptes session et sauvegardés */}
+                {accounts.length > 1 && (
                   <>
                     <div className="px-2 py-1.5">
                       <p className="text-xs font-medium text-muted-foreground">Changer de compte</p>
                     </div>
                     <div className="max-h-48 overflow-y-auto space-y-1">
-                      {allAccounts
-                        .filter(account => account.id !== currentUser?.id)
-                        .map((account) => (
-                          <Button
-                            key={account.id}
-                            variant="ghost"
-                            className="w-full justify-start"
-                            onClick={() => {
-                              switchAccount(account.id);
-                              setShowAccountMenu(false);
-                            }}
-                          >
-                            <div className="w-8 h-8 bg-gradient-to-br from-primary/20 to-primary/10 rounded-full flex items-center justify-center mr-2">
-                              <span className="text-primary font-semibold text-xs">
-                                {account.initials}
-                              </span>
+                      {accounts
+                        .filter(account => account.email !== currentUser?.email)
+                        .map((account) => {
+                          const isSaved = SessionAccountsManager.getSavedAccounts().some(a => a.email === account.email);
+                          
+                          return (
+                            <div key={account.email} className="flex items-center group">
+                              <Button
+                                variant="ghost"
+                                className="w-full justify-start flex-1"
+                                onClick={() => {
+                                  switchAccount(account.email);
+                                  setShowAccountMenu(false);
+                                }}
+                              >
+                                <div className="w-8 h-8 bg-gradient-to-br from-primary/20 to-primary/10 rounded-full flex items-center justify-center mr-2">
+                                  <span className="text-primary font-semibold text-xs">
+                                    {account.initials}
+                                  </span>
+                                </div>
+                                <div className="flex-1 text-left min-w-0">
+                                  <p className="text-sm font-medium truncate">{account.name}</p>
+                                  <p className="text-xs text-muted-foreground truncate">{account.email}</p>
+                                </div>
+                              </Button>
+                              
+                              {/* Save/Remove Account Buttons */}
+                              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                {isSaved ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-950"
+                                    title="Compte sauvegardé - Cliquez pour supprimer"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      SessionAccountsManager.unsaveAccount(account.email);
+                                      setAccounts(SessionAccountsManager.getSessionAccounts());
+                                      toast.info(`✓ Compte non sauvegardé`);
+                                    }}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-950"
+                                    title="Sauvegarder pour les prochaines sessions"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      SessionAccountsManager.saveAccount({
+                                        ...account,
+                                        isSaved: true
+                                      });
+                                      setAccounts(SessionAccountsManager.getSessionAccounts());
+                                      toast.success(`✓ Compte sauvegardé`);
+                                    }}
+                                  >
+                                    <Save className="w-4 h-4" />
+                                  </Button>
+                                )}
+                              </div>
                             </div>
-                            <div className="flex-1 text-left min-w-0">
-                              <p className="text-sm font-medium truncate">{account.name}</p>
-                              <p className="text-xs text-muted-foreground truncate">{account.email}</p>
-                            </div>
-                          </Button>
-                        ))}
+                          );
+                        })}
                     </div>
                     <Separator className="my-2" />
                   </>
@@ -581,10 +631,7 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
                     variant="ghost"
                     className="w-full justify-start"
                     onClick={() => {
-                      if (window.confirm('Vous allez être déconnecté. Veuillez vous reconnecter avec un autre compte.')) {
-                        logout();
-                        setShowAccountMenu(false);
-                      }
+                      setShowAddAccountModal(true);
                     }}
                   >
                     <UserPlus className="w-4 h-4 mr-2" />
@@ -617,6 +664,16 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
           </Popover>
         </div>
       </div>
+      
+      {/* Add Account Modal */}
+      <AddAccountModal 
+        isOpen={showAddAccountModal}
+        onClose={() => setShowAddAccountModal(false)}
+        onAccountAdded={() => {
+          setAccounts(SessionAccountsManager.getSessionAccounts());
+          toast.success('✓ Compte ajouté à la session!');
+        }}
+      />
     </div>
   );
 }
