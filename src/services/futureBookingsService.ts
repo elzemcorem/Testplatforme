@@ -291,6 +291,39 @@ class FutureBookingsService {
   }
 
   /**
+   * Updater le statut d'une réservation future (pour contrôleurs)
+   */
+  async updateFutureBookingStatus(
+    bookingId: string,
+    status: 'confirmed' | 'cancelled'
+  ): Promise<boolean> {
+    try {
+      console.log(`[FutureBookingsService] Updating booking ${bookingId} to status: ${status}`);
+
+      const { data, error } = await this.supabase
+        .from('future_bookings')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', bookingId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[FutureBookingsService] Update error:', error);
+        throw error;
+      }
+
+      console.log('[FutureBookingsService] Update successful:', data);
+      toast.success(status === 'confirmed' ? '✅ Réservation validée' : '❌ Réservation annulée');
+      return true;
+    } catch (error) {
+      console.error('[FutureBookingsService] Error updating booking status:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Erreur inconnue';
+      toast.error(`Erreur: ${errorMsg}`);
+      return false;
+    }
+  }
+
+  /**
    * Obtenir la disponibilité d'un véhicule pour une période
    */
   async getVehicleAvailability(

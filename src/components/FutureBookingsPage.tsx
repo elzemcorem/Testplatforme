@@ -134,19 +134,21 @@ export function FutureBookingsPage() {
     if (!bookingId) return;
 
     try {
-      const { error } = await futureBookingsService.supabase
-        .from('future_bookings')
-        .update({ status })
-        .eq('id', bookingId);
+      console.log(`[FutureBookingsPage] Attempting to ${status} booking ${bookingId}`);
+      console.log(`[FutureBookingsPage] Current user role: ${currentUser?.role}`);
 
-      if (error) throw error;
+      const success = await futureBookingsService.updateFutureBookingStatus(bookingId, status);
 
-      toast.success(status === 'confirmed' ? 'Réservation validée' : 'Réservation annulée');
-      setBookingToValidate(null);
-      loadData();
+      if (success) {
+        setBookingToValidate(null);
+        // Recharger les données après une courte attente pour que l'API Realtime se mette à jour
+        setTimeout(() => {
+          console.log('[FutureBookingsPage] Reloading data after status update');
+          loadData();
+        }, 500);
+      }
     } catch (error) {
-      console.error('Error updating booking status:', error);
-      toast.error('Erreur lors de la mise à jour');
+      console.error('[FutureBookingsPage] Error in handleUpdateBookingStatus:', error);
     }
   };
 
