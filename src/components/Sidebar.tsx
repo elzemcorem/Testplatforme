@@ -151,9 +151,9 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
         },
         {
           id: "configuration",
-          name: "Configuration",
-          icon: Settings,
-          description: "System settings"
+          name: "Vehicules",
+          icon: Car,
+          description: "Gestion des véhicules"
         },
         {
           id: "reports",
@@ -210,9 +210,9 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
         },
         {
           id: "configuration",
-          name: "Configuration",
-          icon: Settings,
-          description: "Gérer les véhicules"
+          name: "Vehicules",
+          icon: Car,
+          description: "Gestion des véhicules"
         },
         {
           id: "checklist",
