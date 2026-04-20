@@ -192,10 +192,25 @@ ALTER TYPE reservation_status ADD VALUE IF NOT EXISTS 'active';
 -- PART 4: CONFIGURER REALTIME
 -- ==========================================
 -- Activer Realtime pour la table future_bookings
-ALTER PUBLICATION supabase_realtime ADD TABLE future_bookings;
+-- Utiliser DO block pour éviter erreur si déjà ajoutée
+DO $$ BEGIN
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE future_bookings;
+  EXCEPTION WHEN duplicate_object THEN
+    -- Déjà dans la publication, c'est normal
+    NULL;
+  END;
+END $$;
 
 -- Activer Realtime pour la table controller_actions_log
-ALTER PUBLICATION supabase_realtime ADD TABLE controller_actions_log;
+DO $$ BEGIN
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE controller_actions_log;
+  EXCEPTION WHEN duplicate_object THEN
+    -- Déjà dans la publication, c'est normal
+    NULL;
+  END;
+END $$;
 
 -- ==========================================
 -- DIAGNOSTIC: Verifier tout fonctionne
