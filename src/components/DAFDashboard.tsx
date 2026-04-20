@@ -24,7 +24,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { ReservationCalendar } from './ReservationCalendar';
 import { dafRealtimeService, type ControllerAction } from '../services/dafRealtimeService';
 import { futureBookingsService, type FutureBooking } from '../services/futureBookingsService';
+import { vehicleService } from '../services/vehicleService';
 import { toast } from 'sonner@2.0.3';
+
+interface Vehicle {
+  id: string;
+  name?: string;
+  model?: string;
+  registration_number?: string;
+}
+
+interface EnrichedFutureBooking extends FutureBooking {
+  vehicle?: Vehicle;
+}
 
 interface DAFStats {
   totalValidations: number;
@@ -44,7 +56,7 @@ export function DAFDashboard() {
   });
   
   const [recentActions, setRecentActions] = useState<ControllerAction[]>([]);
-  const [futureBookings, setFutureBookings] = useState<FutureBooking[]>([]);
+  const [futureBookings, setFutureBookings] = useState<EnrichedFutureBooking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -96,16 +108,32 @@ export function DAFDashboard() {
       console.log('[DAFDashboard] Loading future bookings...');
       // Charger les future bookings
       const bookings = await futureBookingsService.getAllFutureBookings();
-      console.log('[DAFDashboard] Loaded bookings:', bookings);
-      setFutureBookings(bookings || []);
+      
+      // Charger les véhicules pour enrichir les bookings
+      const vehicles = await vehicleService.loadVehicles();
+      const vehiclesMap = new Map(vehicles?.map(v => [v.id, v]) || []);
+      
+      // Enrichir les bookings avec les infos des véhicules
+      const enrichedBookings = (bookings || []).map(booking => ({
+        ...booking,
+        vehicle: vehiclesMap.get(booking.vehicle_id) || { 
+          id: booking.vehicle_id, 
+          name: 'Véhicule inconnu',
+          model: 'N/A',
+          registration_number: 'N/A'
+        }
+      }));
+      
+      console.log('[DAFDashboard] Loaded bookings:', enrichedBookings);
+      setFutureBookings(enrichedBookings);
 
       // Calculer les stats
       const stats: DAFStats = {
         totalValidations: (actions || []).filter(a => a.action_type === 'validated').length,
         totalCancellations: (actions || []).filter(a => a.action_type === 'cancelled').length,
         totalModifications: (actions || []).filter(a => a.action_type === 'modified').length,
-        totalFutureBookings: (bookings || []).length,
-        pendingBookings: (bookings || []).filter(b => b.status === 'pending').length
+        totalFutureBookings: enrichedBookings.length,
+        pendingBookings: enrichedBookings.filter(b => b.status === 'pending').length
       };
       
       console.log('[DAFDashboard] Stats:', stats);
@@ -356,24 +384,29 @@ export function DAFDashboard() {
               {futureBookings
                 .filter(b => b.status === 'pending')
                 .slice(0, 5)
-                .map(booking => (
-                  <div
-                    key={booking.id}
-                    className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded border border-yellow-200"
-                  >
-                    <div className="text-sm">
-                      <div className="font-medium">
-                        {booking.vehicle.model} ({booking.vehicle.registration_number})
+                .map(booking => {
+                  const vehicleName = booking.vehicle?.model || booking.vehicle?.name || 'Véhicule inconnu';
+                  const registrationNumber = booking.vehicle?.registration_number || 'N/A';
+                  
+                  return (
+                    <div
+                      key={booking.id}
+                      className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded border border-yellow-200"
+                    >
+                      <div className="text-sm">
+                        <div className="font-medium">
+                          {vehicleName} ({registrationNumber})
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {format(new Date(booking.planned_start_date), 'dd MMM yyyy')} → {format(new Date(booking.planned_end_date), 'dd MMM yyyy')}
+                        </div>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        {format(new Date(booking.planned_start_date), 'dd MMM yyyy')} → {format(new Date(booking.planned_end_date), 'dd MMM yyyy')}
-                      </div>
+                      <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
+                        En attente
+                      </Badge>
                     </div>
-                    <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
-                      En attente
-                    </Badge>
-                  </div>
-                ))}
+                  );
+                })}
             </div>
           </CardContent>
         </Card>
