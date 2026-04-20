@@ -12,7 +12,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { DateTimePicker } from "./DateTimePicker";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import { useAuth } from "../contexts/AuthContext";
 import { futureBookingsService } from "../services/futureBookingsService";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";

@@ -3,7 +3,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import { CheckSquare, Eye, Calendar, User, PenTool, Trash2 } from "lucide-react";
 import {
   Dialog,

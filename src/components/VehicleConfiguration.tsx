@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "./ui/select";
 import { Plus, Edit, Trash2, Car, Upload, Image as ImageIcon } from "lucide-react";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import { vehicleService, Vehicle as VehicleType } from "../services/vehicleService";
 
 interface Vehicle {
