@@ -9,12 +9,15 @@ import { fr } from "date-fns/locale";
 import { cn } from "./ui/utils";
 
 interface DateTimePickerProps {
-  date: Date | undefined;
-  setDate: (date: Date | undefined) => void;
+  value?: Date;
+  onChange?: (date: Date | undefined) => void;
   placeholder?: string;
+  minDate?: Date;
 }
 
-export function DateTimePicker({ date, setDate, placeholder = "Choisir une date" }: DateTimePickerProps) {
+export function DateTimePicker({ value, onChange, placeholder = "Choisir une date", minDate }: DateTimePickerProps) {
+  const date = value;
+  const setDate = onChange;
   const [isOpen, setIsOpen] = useState(false);
 
   const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, "0"));
@@ -89,9 +92,9 @@ export function DateTimePicker({ date, setDate, placeholder = "Choisir une date"
             onSelect={handleDateSelect}
             initialFocus
             disabled={(calendarDate) => {
-              const today = new Date();
-              today.setHours(0, 0, 0, 0);
-              return calendarDate < today;
+              const min = minDate || new Date();
+              min.setHours(0, 0, 0, 0);
+              return calendarDate < min;
             }}
           />
           

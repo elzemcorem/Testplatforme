@@ -26,7 +26,7 @@ interface CreateFutureBookingParams {
 }
 
 class FutureBookingsService {
-  private supabase = createClient(
+  public supabase = createClient(
     `https://${projectId}.supabase.co`,
     publicAnonKey
   );

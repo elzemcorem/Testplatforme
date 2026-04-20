@@ -54,7 +54,13 @@ export function FutureBookingsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [bookingToDelete, setBookingToDelete] = useState<string | null>(null);
+  const [bookingToValidate, setBookingToValidate] = useState<string | null>(null);
+  const [newStatus, setNewStatus] = useState<'confirmed' | 'cancelled'>('confirmed');
   const { currentUser } = useAuth();
+
+  // Vérifier si l'utilisateur est contrôleur
+  const isController = currentUser?.user_metadata?.role === 'controller' || 
+                       currentUser?.app_metadata?.role === 'controller';
 
   useEffect(() => {
     loadData();
@@ -97,6 +103,26 @@ export function FutureBookingsPage() {
   const handleSelectVehicle = (vehicle: Vehicle) => {
     setSelectedVehicle(vehicle);
     setIsFormOpen(true);
+  };
+
+  const handleUpdateBookingStatus = async (bookingId: string | undefined, status: 'confirmed' | 'cancelled') => {
+    if (!bookingId) return;
+
+    try {
+      const { error } = await futureBookingsService.supabase
+        .from('future_bookings')
+        .update({ status })
+        .eq('id', bookingId);
+
+      if (error) throw error;
+
+      toast.success(status === 'confirmed' ? 'Réservation validée' : 'Réservation annulée');
+      setBookingToValidate(null);
+      loadData();
+    } catch (error) {
+      console.error('Error updating booking status:', error);
+      toast.error('Erreur lors de la mise à jour');
+    }
   };
 
   const handleDeleteBooking = async (bookingId: string | undefined) => {
@@ -328,6 +354,118 @@ export function FutureBookingsPage() {
             className="bg-destructive hover:bg-destructive/90"
           >
             Annuler la réservation
+          </AlertDialogAction>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Toutes les réservations futures (pour contrôleurs et DAF) */}
+      {isController && (
+        <div>
+          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+            <RefreshCw className="w-5 h-5" />
+            Toutes les réservations futures (Validation)
+          </h2>
+          
+          {allBookings.length === 0 ? (
+            <Card className="bg-slate-50 dark:bg-slate-900/50 border-dashed">
+              <CardContent className="pt-6">
+                <div className="text-center space-y-3">
+                  <AlertCircle className="w-8 h-8 mx-auto text-muted-foreground" />
+                  <p className="text-muted-foreground">Aucune réservation future en attente</p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="rounded-lg border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead>Utilisateur</TableHead>
+                    <TableHead>Véhicule</TableHead>
+                    <TableHead>Début</TableHead>
+                    <TableHead>Fin</TableHead>
+                    <TableHead>Statut</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {allBookings
+                    .filter(b => b.status === 'pending') // Afficher seulement les réservations en attente
+                    .map((booking) => {
+                      const startDate = new Date(booking.planned_start_date || '');
+                      const endDate = new Date(booking.planned_end_date || '');
+                      const vehicle = vehicles.find(v => v.id === booking.vehicle_id);
+
+                      return (
+                        <TableRow key={booking.id}>
+                          <TableCell className="text-sm">
+                            <span className="text-muted-foreground">ID: {booking.user_id?.slice(0, 8)}</span>
+                          </TableCell>
+                          <TableCell className="font-semibold">{vehicle?.name || 'N/A'}</TableCell>
+                          <TableCell className="text-sm">
+                            {format(startDate, 'PPP', { locale: fr })}
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {format(endDate, 'PPP', { locale: fr })}
+                          </TableCell>
+                          <TableCell>
+                            {getStatusBadge(booking.status)}
+                          </TableCell>
+                          <TableCell className="text-right space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setBookingToValidate(booking.id);
+                                setNewStatus('confirmed');
+                              }}
+                              className="text-green-700 border-green-300 hover:bg-green-50"
+                            >
+                              <CheckCircle2 className="w-4 h-4 mr-1" />
+                              Valider
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setBookingToValidate(booking.id);
+                                setNewStatus('cancelled');
+                              }}
+                              className="text-red-700 border-red-300 hover:bg-red-50"
+                            >
+                              <XCircle className="w-4 h-4 mr-1" />
+                              Refuser
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Validation Confirmation Dialog */}
+      <AlertDialog open={bookingToValidate !== null} onOpenChange={(open) => !open && setBookingToValidate(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {newStatus === 'confirmed' ? 'Valider la réservation?' : 'Refuser la réservation?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {newStatus === 'confirmed' 
+                ? 'Cette réservation sera confirmée et le utilisateur sera notifié.'
+                : 'Cette réservation sera annulée et l\'utilisateur en sera notifié.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogCancel>Annuler</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => handleUpdateBookingStatus(bookingToValidate || undefined, newStatus)}
+            className={newStatus === 'confirmed' ? 'bg-green-600 hover:bg-green-700' : 'bg-destructive hover:bg-destructive/90'}
+          >
+            {newStatus === 'confirmed' ? 'Valider' : 'Refuser'}
           </AlertDialogAction>
         </AlertDialogContent>
       </AlertDialog>

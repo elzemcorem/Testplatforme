@@ -29,25 +29,22 @@ CREATE INDEX IF NOT EXISTS idx_future_bookings_planned_dates ON future_bookings(
 -- Enable RLS
 ALTER TABLE future_bookings ENABLE ROW LEVEL SECURITY;
 
--- Policy pour les utilisateurs normaux
-DROP POLICY IF EXISTS "Users can view their own future bookings" ON future_bookings;
-CREATE POLICY "Users can view their own future bookings" ON future_bookings
-  FOR SELECT USING (user_id = auth.uid());
+-- Policy: Tout le monde peut VOIR tous les future bookings (sauf cancelled)
+DROP POLICY IF EXISTS "Everyone can view all future bookings" ON future_bookings;
+CREATE POLICY "Everyone can view all future bookings" ON future_bookings
+  FOR SELECT USING (status != 'cancelled');
 
+-- Policy: Les utilisateurs peuvent créer leurs propres réservations futures
 DROP POLICY IF EXISTS "Users can create their own future bookings" ON future_bookings;
 CREATE POLICY "Users can create their own future bookings" ON future_bookings
   FOR INSERT WITH CHECK (user_id = auth.uid());
 
-DROP POLICY IF EXISTS "Users can update their own future bookings" ON future_bookings;
-CREATE POLICY "Users can update their own future bookings" ON future_bookings
-  FOR UPDATE USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+-- Policy: Les utilisateurs peuvent supprimer leurs propres réservations
+DROP POLICY IF EXISTS "Users can delete their own future bookings" ON future_bookings;
+CREATE POLICY "Users can delete their own future bookings" ON future_bookings
+  FOR DELETE USING (user_id = auth.uid());
 
--- Policy pour les utilisateurs de voir les futures bookings autres (pour verifier la disponibilite)
-DROP POLICY IF EXISTS "Users can view all future bookings for availability" ON future_bookings;
-CREATE POLICY "Users can view all future bookings for availability" ON future_bookings
-  FOR SELECT USING (status != 'cancelled');
-
--- Policy pour DAF
+-- Policy pour DAF: voir et gérer tous les future bookings
 DROP POLICY IF EXISTS "DAF can view all future bookings" ON future_bookings;
 CREATE POLICY "DAF can view all future bookings" ON future_bookings
   FOR SELECT USING (
@@ -68,11 +65,40 @@ CREATE POLICY "DAF can update future bookings" ON future_bookings
     auth.jwt()->>'email' = 'daf@beninpetro.com'
   );
 
--- Policy pour controleur
+DROP POLICY IF EXISTS "DAF can delete future bookings" ON future_bookings;
+CREATE POLICY "DAF can delete future bookings" ON future_bookings
+  FOR DELETE USING (
+    auth.jwt()->>'email' = 'daf@beninpetro.com'
+  );
+
+-- Policy pour contrôleurs: voir tous les future bookings et les valider/annuler (UPDATE)
 DROP POLICY IF EXISTS "Controllers can view future bookings" ON future_bookings;
 CREATE POLICY "Controllers can view future bookings" ON future_bookings
   FOR SELECT USING (
     auth.jwt()->>'role' = 'controller'
+  );
+
+DROP POLICY IF EXISTS "Controllers can update future bookings status" ON future_bookings;
+CREATE POLICY "Controllers can update future bookings status" ON future_bookings
+  FOR UPDATE USING (
+    auth.jwt()->>'role' = 'controller'
+  ) WITH CHECK (
+    auth.jwt()->>'role' = 'controller'
+  );
+
+-- Policy pour admin: voir et gérer tous les future bookings
+DROP POLICY IF EXISTS "Admin can view future bookings" ON future_bookings;
+CREATE POLICY "Admin can view future bookings" ON future_bookings
+  FOR SELECT USING (
+    auth.jwt()->>'role' = 'admin'
+  );
+
+DROP POLICY IF EXISTS "Admin can update future bookings" ON future_bookings;
+CREATE POLICY "Admin can update future bookings" ON future_bookings
+  FOR UPDATE USING (
+    auth.jwt()->>'role' = 'admin'
+  ) WITH CHECK (
+    auth.jwt()->>'role' = 'admin'
   );
 
 -- Table pour tracker les actions du controleur
