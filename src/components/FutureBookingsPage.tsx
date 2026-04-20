@@ -1,8 +1,3 @@
-/**
- * Future Bookings Page
- * Page pour réserver des véhicules à l'avance (jours, semaines, mois)
- */
-
 import { useState, useEffect } from 'react';
 import { format, isPast, isSameDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -25,6 +20,7 @@ import { futureBookingsService, type FutureBooking } from '../services/futureBoo
 import { vehicleService } from '../services/vehicleService';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'sonner@2.0.3';
+import { supabase } from '../utils/supabase/client';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -58,12 +54,41 @@ export function FutureBookingsPage() {
   const [newStatus, setNewStatus] = useState<'confirmed' | 'cancelled'>('confirmed');
   const { currentUser } = useAuth();
 
-  // Vérifier si l'utilisateur est contrôleur
-  const isController = currentUser?.user_metadata?.role === 'controller' || 
-                       currentUser?.app_metadata?.role === 'controller';
+  // Vérifier si l'utilisateur est contrôleur - vérifier multiple sources
+  const isController = () => {
+    if (!currentUser) return false;
+    
+    // Check role from context (set by AuthContext)
+    if (currentUser.role === 'controller') return true;
+    
+    // Fallback pour backend
+    return false;
+  };
 
   useEffect(() => {
     loadData();
+
+    // Subscribe to real-time changes
+    const channel = supabase
+      .channel('future_bookings_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'future_bookings'
+        },
+        (payload) => {
+          console.log('📡 Real-time update received:', payload);
+          // Reload data when changes occur
+          loadData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
   }, [currentUser?.id]);
 
   const loadData = async () => {
@@ -359,7 +384,7 @@ export function FutureBookingsPage() {
       </AlertDialog>
 
       {/* Toutes les réservations futures (pour contrôleurs et DAF) */}
-      {isController && (
+      {isController() && (
         <div>
           <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
             <RefreshCw className="w-5 h-5" />
