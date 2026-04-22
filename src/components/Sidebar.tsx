@@ -362,7 +362,7 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-4 py-6">
+        <nav className="flex-1 min-h-0 px-4 py-6 overflow-y-auto">
           <div className="space-y-4">
             {navigationItems.map((item) => {
               const Icon = item.icon;
@@ -476,7 +476,7 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
         </nav>
 
         {/* User Profile Section */}
-        <div className="p-4 flex justify-center">
+        <div className="p-4 flex justify-center shrink-0">
           <Popover open={showAccountMenu} onOpenChange={setShowAccountMenu}>
             <PopoverTrigger asChild>
               <div className="relative group">
