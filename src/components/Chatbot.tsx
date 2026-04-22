@@ -4,8 +4,8 @@ import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
 import { Send, MessageCircle } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { supabase } from "../utils/supabase/client";
 import { toast } from "sonner";
-import { createClient } from "@supabase/supabase-js";
 
 interface ChatMessage {
   id: string;
@@ -27,10 +27,7 @@ export function Chatbot() {
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const supabase = createClient(
-    import.meta.env.VITE_SUPABASE_URL,
-    import.meta.env.VITE_SUPABASE_ANON_KEY
-  );
+  // ✅ Fix #2 : plus de createClient() inline — on utilise le client partagé
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -86,6 +83,9 @@ export function Chatbot() {
           role: message.role,
           content: message.content,
         }));
+
+      // ✅ Fix #2 : récupérer le vrai JWT depuis Supabase Auth
+      const { data: { session } } = await supabase.auth.getSession();
 
       const { data, error } = await supabase.functions.invoke<EdgeFunctionResponse>("chatbot-ai", {
         body: {
