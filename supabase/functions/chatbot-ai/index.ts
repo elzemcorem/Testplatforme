@@ -6,6 +6,8 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
+const DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b:free";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -208,7 +210,7 @@ Deno.serve(async (req: Request) => {
       user_id: user.id,
       role: "user",
       content: message,
-      model: "openrouter",
+      model: DEFAULT_MODEL,
     });
 
     const messages = [
@@ -230,7 +232,7 @@ Deno.serve(async (req: Request) => {
         "X-Title": "TestPlatforme Chatbot",
       },
       body: JSON.stringify({
-        model: "meta-llama/llama-3.2-3b-instruct:free",
+        model: DEFAULT_MODEL,
         messages,
         tools: MCP_TOOLS,
         tool_choice: "auto",
@@ -265,7 +267,7 @@ Deno.serve(async (req: Request) => {
           "X-Title": "TestPlatforme Chatbot",
         },
         body: JSON.stringify({
-          model: "meta-llama/llama-3.2-3b-instruct:free",
+          model: DEFAULT_MODEL,
           messages: toolCallMessages,
           max_tokens: 1024,
         }),
@@ -281,13 +283,13 @@ Deno.serve(async (req: Request) => {
       user_id: user.id,
       role: "assistant",
       content: assistantMessage,
-      model: llmData.model || "openrouter",
+      model: llmData.model || DEFAULT_MODEL,
     });
 
     return new Response(
       JSON.stringify({
         response: assistantMessage,
-        model: llmData.model || "unknown",
+        model: llmData.model || DEFAULT_MODEL,
       }),
       {
         headers: {
