@@ -21,7 +21,7 @@ interface EdgeFunctionResponse {
 }
 
 export function Chatbot() {
-  const { user, session } = useAuth() as { user: any; session?: { access_token?: string } | null };
+  const { currentUser, isLoading: isAuthLoading } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -53,7 +53,12 @@ export function Chatbot() {
     const trimmedInput = input.trim();
     if (!trimmedInput || isLoading) return;
 
-    if (!user) {
+    if (isAuthLoading) {
+      toast.info("Chargement de votre session en cours...");
+      return;
+    }
+
+    if (!currentUser) {
       toast.error("Vous devez être connecté pour utiliser le chatbot.");
       return;
     }
@@ -71,6 +76,9 @@ export function Chatbot() {
     setIsLoading(true);
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
       const history = updatedMessages
         .filter((message) => message.id !== "welcome")
         .slice(-10)
@@ -84,9 +92,9 @@ export function Chatbot() {
           message: trimmedInput,
           conversationHistory: history,
         },
-        headers: session?.access_token
+        headers: accessToken
           ? {
-              Authorization: `Bearer ${session.access_token}`,
+              Authorization: `Bearer ${accessToken}`,
             }
           : undefined,
       });
