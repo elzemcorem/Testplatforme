@@ -4,8 +4,8 @@ import { Input } from "./ui/input";
 import { ScrollArea } from "./ui/scroll-area";
 import { Send, MessageCircle } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { supabase } from "../utils/supabase/client";
 import { toast } from "sonner";
-import { createClient } from "@supabase/supabase-js";
 
 interface ChatMessage {
   id: string;
@@ -21,16 +21,14 @@ interface EdgeFunctionResponse {
 }
 
 export function Chatbot() {
-  const { user, session } = useAuth() as { user: any; session?: { access_token?: string } | null };
+  // ✅ Fix #1 : utiliser currentUser (et non "user" qui n'existe pas dans AuthContext)
+  const { currentUser } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const supabase = createClient(
-    import.meta.env.VITE_SUPABASE_URL,
-    import.meta.env.VITE_SUPABASE_ANON_KEY
-  );
+  // ✅ Fix #2 : plus de createClient() inline — on utilise le client partagé
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -53,7 +51,8 @@ export function Chatbot() {
     const trimmedInput = input.trim();
     if (!trimmedInput || isLoading) return;
 
-    if (!user) {
+    // ✅ Fix #1 : vérification avec currentUser
+    if (!currentUser) {
       toast.error("Vous devez être connecté pour utiliser le chatbot.");
       return;
     }
@@ -79,15 +78,16 @@ export function Chatbot() {
           content: message.content,
         }));
 
+      // ✅ Fix #2 : récupérer le vrai JWT depuis Supabase Auth
+      const { data: { session } } = await supabase.auth.getSession();
+
       const { data, error } = await supabase.functions.invoke<EdgeFunctionResponse>("chatbot-ai", {
         body: {
           message: trimmedInput,
           conversationHistory: history,
         },
         headers: session?.access_token
-          ? {
-              Authorization: `Bearer ${session.access_token}`,
-            }
+          ? { Authorization: `Bearer ${session.access_token}` }
           : undefined,
       });
 
