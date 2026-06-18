@@ -1,38 +1,18 @@
 import { useState } from "react";
 import { cn } from "./ui/utils";
-import { 
-  LayoutDashboard, 
-  BarChart3, 
-  Settings, 
-  FileText, 
-  User,
-  Car,
-  X,
-  MessageSquare,
-  LogOut,
-  UserCog,
-  ClipboardList,
-  Users,
-  UserPlus,
-  CheckSquare,
-  ClipboardCheck,
-  HelpCircle,
-  Calendar,
-  Save,
-  Trash2
+import {
+  LayoutDashboard, BarChart3, Settings, FileText, User, Car,
+  MessageSquare, LogOut, UserCog, ClipboardList, Users, UserPlus,
+  CheckSquare, ClipboardCheck, HelpCircle, Calendar, Save, Trash2,
+  ChevronRight,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { themeService } from "../services/themeService";
 import { SessionAccountsManager } from "../services/sessionAccountsManager";
 import { AddAccountModal } from "./AddAccountModal";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "./ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Button } from "./ui/button";
 import { Separator } from "./ui/separator";
-import { Badge } from "./ui/badge";
 import { toast } from "sonner";
 
 interface SidebarProps {
@@ -40,581 +20,321 @@ interface SidebarProps {
   onPageChange: (page: string) => void;
 }
 
-// Fonctions utilitaires
 const hexToRgb = (hex: string): string => {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '0, 0, 0';
+  const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return r ? `${parseInt(r[1], 16)}, ${parseInt(r[2], 16)}, ${parseInt(r[3], 16)}` : "0,0,0";
 };
 
-const adjustBrightness = (color: string, percent: number): string => {
-  const num = parseInt(color.replace('#', ''), 16);
-  const amt = Math.round(2.55 * percent);
-  const R = (num >> 16) + amt;
-  const G = (num >> 8 & 0x00FF) + amt;
-  const B = (num & 0x0000FF) + amt;
-  return '#' + (
-    0x1000000 +
-    (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
-    (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
-    (B < 255 ? B < 1 ? 0 : B : 255)
-  ).toString(16).slice(1);
+const darken = (hex: string, pct: number): string => {
+  const num = parseInt(hex.replace("#", ""), 16);
+  const amt = Math.round(2.55 * pct);
+  const clamp = (v: number) => Math.min(255, Math.max(0, v));
+  const R = clamp((num >> 16) + amt);
+  const G = clamp(((num >> 8) & 0xff) + amt);
+  const B = clamp((num & 0xff) + amt);
+  return "#" + ((1 << 24) | (R << 16) | (G << 8) | B).toString(16).slice(1);
 };
+
+type NavItem = { id: string; name: string; icon: React.ElementType; description: string };
 
 export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [showAccountMenu, setShowAccountMenu] = useState(false);
-  const [showAddAccountModal, setShowAddAccountModal] = useState(false);
-  const [accounts, setAccounts] = useState(SessionAccountsManager.getSessionAccounts());
-  
+  const [showMenu, setShowMenu] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [accounts, setAccounts] = useState(() => SessionAccountsManager.getSessionAccounts());
+
   const { currentUser, logout, switchAccount } = useAuth();
   const colors = themeService.getCurrentColors();
-  const scheme = themeService.getCurrentScheme();
-  const isChromatic = scheme === 'chromatic';
+  const isChromatic = themeService.getCurrentScheme() === "chromatic";
 
-  const handleNavigationClick = (pageId: string) => {
-    if (!isExpanded) {
-      setIsExpanded(true);
-      // Delay the page change to allow expansion animation
-      setTimeout(() => onPageChange(pageId), 150);
-    } else {
-      onPageChange(pageId);
-    }
-  };
-  
-  // Navigation différente selon le rôle
-  const getNavigationItems = () => {
+  const navItems: NavItem[] = (() => {
     if (!currentUser) return [];
-    
     const { role, isDAF } = currentUser;
-    
-    // DAF a son propre menu spécialisé
-    if (isDAF) {
-      return [
-        {
-          id: "dashboard",
-          name: "Dashboard DAF",
-          icon: BarChart3,
-          description: "Suivi temps réel"
-        },
-        {
-          id: "reservations",
-          name: "Réservations",
-          icon: ClipboardList,
-          description: "Gérer les réservations"
-        },
-        {
-          id: "exit-reports",
-          name: "Rapports de Sortie",
-          icon: FileText,
-          description: "Voir les rapports"
-        },
-        {
-          id: "chat",
-          name: "Chat",
-          icon: MessageSquare,
-          description: "Messages"
-        },
-        {
-          id: "settings",
-          name: "Paramètres",
-          icon: Settings,
-          description: "Vos préférences"
-        }
-      ];
-    }
-    
-    if (role === "admin") {
-      return [
-        {
-          id: "dashboard",
-          name: "Dashboard",
-          icon: LayoutDashboard,
-          description: "Overview & monitoring"
-        },
-        {
-          id: "reservations",
-          name: "Réservations",
-          icon: ClipboardList,
-          description: "Voir les réservations"
-        },
-        {
-          id: "future-bookings",
-          name: "Réservations Futures",
-          icon: Calendar,
-          description: "Réserver à l'avance"
-        },
-        {
-          id: "analytics",
-          name: "Analytics", 
-          icon: BarChart3,
-          description: "Advanced analytics"
-        },
-        {
-          id: "configuration",
-          name: "Vehicules",
-          icon: Car,
-          description: "Gestion des véhicules"
-        },
-        {
-          id: "reports",
-          name: "Reports",
-          icon: FileText,
-          description: "Generate reports"
-        },
-        {
-          id: "accounts",
-          name: "Gestion de comptes",
-          icon: Users,
-          description: "Manage user accounts"
-        },
-        {
-          id: "chat",
-          name: "Chat",
-          icon: MessageSquare,
-          description: "Discussion en temps réel"
-        },
-        {
-          id: "help",
-          name: "Aide",
-          icon: HelpCircle,
-          description: "Aide intelligente"
-        },
-        {
-          id: "settings",
-          name: "Settings & Profile",
-          icon: User,
-          description: "User preferences"
-        }
-      ];
-    }
-    
-    if (role === "controller") {
-      return [
-        {
-          id: "dashboard",
-          name: "Dashboard",
-          icon: LayoutDashboard,
-          description: "Overview & monitoring"
-        },
-        {
-          id: "reservations",
-          name: "Réservations",
-          icon: ClipboardList,
-          description: "Manage reservations"
-        },
-        {
-          id: "future-bookings",
-          name: "Réservations Futures",
-          icon: Calendar,
-          description: "Réserver à l'avance"
-        },
-        {
-          id: "configuration",
-          name: "Vehicules",
-          icon: Car,
-          description: "Gestion des véhicules"
-        },
-        {
-          id: "checklist",
-          name: "Checklist",
-          icon: CheckSquare,
-          description: "Fiches d'état véhicules"
-        },
-        {
-          id: "reports",
-          name: "Rapports",
-          icon: FileText,
-          description: "Générer des rapports"
-        },
-        {
-          id: "exit-reports",
-          name: "Rapports de Sortie",
-          icon: ClipboardCheck,
-          description: "Rapports de sortie véhicules"
-        },
-        {
-          id: "chat",
-          name: "Chat",
-          icon: MessageSquare,
-          description: "Discussion en temps réel"
-        },
-        {
-          id: "help",
-          name: "Aide",
-          icon: HelpCircle,
-          description: "Aide intelligente"
-        },
-        {
-          id: "settings",
-          name: "Settings & Profile",
-          icon: User,
-          description: "User preferences"
-        }
-      ];
-    }
-    
-    // Utilisateur normal
-    return [
-      {
-        id: "dashboard",
-        name: "Réserver",
-        icon: Car,
-        description: "Réserver un véhicule"
-      },
-      {
-        id: "reservations",
-        name: "Mes Réservations",
-        icon: ClipboardList,
-        description: "Voir mes réservations"
-      },
-      {
-        id: "future-bookings",
-        name: "Réservations Futures",
-        icon: Calendar,
-        description: "Réserver à l'avance"
-      },
-      {
-        id: "chat",
-        name: "Chat",
-        icon: MessageSquare,
-        description: "Discussion en temps réel"
-      },
-      {
-        id: "help",
-        name: "Aide",
-        icon: HelpCircle,
-        description: "Aide intelligente"
-      },
-      {
-        id: "settings",
-        name: "Paramètres",
-        icon: Settings,
-        description: "User preferences"
-      }
+
+    if (isDAF) return [
+      { id: "dashboard",    name: "Dashboard DAF",       icon: BarChart3,      description: "Suivi temps réel" },
+      { id: "reservations", name: "Réservations",        icon: ClipboardList,  description: "Gérer les réservations" },
+      { id: "exit-reports", name: "Rapports de Sortie",  icon: FileText,       description: "Voir les rapports" },
+      { id: "chat",         name: "Chat",                icon: MessageSquare,  description: "Messages" },
+      { id: "settings",     name: "Paramètres",          icon: Settings,       description: "Vos préférences" },
     ];
+
+    if (role === "admin") return [
+      { id: "dashboard",      name: "Dashboard",            icon: LayoutDashboard, description: "Overview & monitoring" },
+      { id: "reservations",   name: "Réservations",         icon: ClipboardList,   description: "Voir les réservations" },
+      { id: "future-bookings",name: "Rés. Futures",         icon: Calendar,        description: "Réserver à l'avance" },
+      { id: "analytics",      name: "Analytics",            icon: BarChart3,       description: "Advanced analytics" },
+      { id: "configuration",  name: "Véhicules",            icon: Car,             description: "Gestion des véhicules" },
+      { id: "reports",        name: "Reports",              icon: FileText,        description: "Generate reports" },
+      { id: "accounts",       name: "Comptes",              icon: Users,           description: "Manage user accounts" },
+      { id: "chat",           name: "Chat",                 icon: MessageSquare,   description: "Discussion en temps réel" },
+      { id: "help",           name: "Aide",                 icon: HelpCircle,      description: "Aide intelligente" },
+      { id: "settings",       name: "Paramètres",           icon: User,            description: "User preferences" },
+    ];
+
+    if (role === "controller") return [
+      { id: "dashboard",      name: "Dashboard",         icon: LayoutDashboard, description: "Overview & monitoring" },
+      { id: "reservations",   name: "Réservations",      icon: ClipboardList,   description: "Manage reservations" },
+      { id: "future-bookings",name: "Rés. Futures",      icon: Calendar,        description: "Réserver à l'avance" },
+      { id: "configuration",  name: "Véhicules",         icon: Car,             description: "Gestion des véhicules" },
+      { id: "checklist",      name: "Checklist",         icon: CheckSquare,     description: "Fiches d'état véhicules" },
+      { id: "reports",        name: "Rapports",          icon: FileText,        description: "Générer des rapports" },
+      { id: "exit-reports",   name: "Sorties",           icon: ClipboardCheck,  description: "Rapports de sortie" },
+      { id: "chat",           name: "Chat",              icon: MessageSquare,   description: "Discussion en temps réel" },
+      { id: "help",           name: "Aide",              icon: HelpCircle,      description: "Aide intelligente" },
+      { id: "settings",       name: "Paramètres",        icon: User,            description: "User preferences" },
+    ];
+
+    return [
+      { id: "dashboard",      name: "Réserver",          icon: Car,            description: "Réserver un véhicule" },
+      { id: "reservations",   name: "Mes Réservations",  icon: ClipboardList,  description: "Voir mes réservations" },
+      { id: "future-bookings",name: "Futures",           icon: Calendar,       description: "Réserver à l'avance" },
+      { id: "chat",           name: "Chat",              icon: MessageSquare,  description: "Discussion en temps réel" },
+      { id: "help",           name: "Aide",              icon: HelpCircle,     description: "Aide intelligente" },
+      { id: "settings",       name: "Paramètres",        icon: Settings,       description: "Préférences" },
+    ];
+  })();
+
+  const roleLabel = currentUser?.isDAF ? "DAF"
+    : currentUser?.role === "admin" ? "Administrateur"
+    : currentUser?.role === "controller" ? "Contrôleur"
+    : "Utilisateur";
+
+  const primary = colors.primary;
+  const primaryRgb = hexToRgb(primary);
+
+  const cardStyle = {
+    background: isChromatic
+      ? `linear-gradient(180deg, rgba(${primaryRgb},0.08) 0%, rgba(${hexToRgb(colors.secondary)},0.04) 100%)`
+      : `${colors.background}`,
+    border: `1px solid ${isChromatic ? `${primary}18` : `${primary}28`}`,
+    boxShadow: isChromatic
+      ? `0 16px 40px -8px rgba(${primaryRgb},0.18)`
+      : `0 4px 24px -4px rgba(0,0,0,0.10)`,
   };
 
-  const navigationItems = getNavigationItems();
+  const dividerStyle = { height: 1, backgroundColor: `${primary}14` };
 
-  const handleLogout = () => {
-    logout();
-    setShowAccountMenu(false);
+  const avatarStyle = {
+    background: `linear-gradient(135deg, ${primary}, ${darken(primary, -18)})`,
+  };
+
+  const logoStyle = {
+    background: `linear-gradient(135deg, ${primary}, ${darken(primary, -20)})`,
   };
 
   return (
-    <div className="ml-6 my-6">
-      <div 
+    <div className="p-3 h-screen">
+      <div
         className={cn(
-          "flex flex-col h-[calc(100vh-3rem)] transition-all duration-300 ease-in-out rounded-3xl overflow-hidden",
-          isExpanded ? "w-64" : "w-20"
+          "flex flex-col h-full rounded-2xl overflow-hidden transition-[width] duration-300 ease-in-out",
+          isExpanded ? "w-52" : "w-14"
         )}
-        style={{
-          background: isChromatic 
-            ? `linear-gradient(180deg, rgba(${hexToRgb(colors.primary)}, 0.08) 0%, rgba(${hexToRgb(colors.secondary)}, 0.04) 100%)`
-            : `linear-gradient(to bottom, ${colors.background}95, ${colors.background}85)`,
-          borderColor: isChromatic ? `${colors.primary}20` : `${colors.primary}40`,
-          boxShadow: isChromatic 
-            ? `0 20px 25px -5px rgba(${hexToRgb(colors.primary)}, 0.1)`
-            : `0 20px 25px -5px rgba(0, 0, 0, 0.1)`,
-          border: `1px solid ${isChromatic ? `${colors.primary}15` : `${colors.primary}30`}`,
-        }}
+        style={cardStyle}
       >
-        {/* Header with Logo */}
-        <div className="p-6 flex flex-col items-center relative">
-          {/* Close button when expanded */}
-          {isExpanded && (
-            <button
-              onClick={() => setIsExpanded(false)}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110"
-              style={{
-                backgroundColor: `${colors.primary}30`,
-                color: colors.primary,
-              }}
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
-          
-          <div 
-            className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg"
-            style={{
-              background: `linear-gradient(to br, ${colors.primary}, ${adjustBrightness(colors.primary, -20)})`,
-            }}
+        {/* ── Logo / Toggle ── */}
+        <button
+          onClick={() => setIsExpanded((v) => !v)}
+          className="flex items-center gap-2.5 mx-2 mt-3 mb-2 px-2 py-2 rounded-xl hover:bg-black/5 transition-colors duration-150 overflow-hidden"
+        >
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md"
+            style={logoStyle}
           >
-            <Car className="w-6 h-6 text-white" />
+            <Car className="w-4 h-4 text-white" />
           </div>
           {isExpanded && (
-            <div className="mt-3 text-center">
-              <h2 
-                className="font-semibold text-base whitespace-nowrap"
-                style={{ color: colors.foreground }}
-              >
+            <div className="text-left overflow-hidden">
+              <p className="text-sm font-semibold leading-tight whitespace-nowrap" style={{ color: colors.foreground }}>
                 Bénin Petro
-              </h2>
-              <p 
-                className="text-xs whitespace-nowrap mt-1"
-                style={{ color: `${colors.foreground}80` }}
-              >
+              </p>
+              <p className="text-[11px] leading-tight whitespace-nowrap" style={{ color: `${colors.foreground}65` }}>
                 Location de véhicules
               </p>
             </div>
           )}
-        </div>
+        </button>
 
-        {/* Navigation */}
-        <nav className="flex-1 min-h-0 px-4 py-6 overflow-y-auto">
-          <div className="space-y-4">
-            {navigationItems.map((item) => {
+        <div className="mx-3" style={dividerStyle} />
+
+        {/* ── Navigation ── */}
+        <nav
+          className="flex-1 min-h-0 px-2 py-2 overflow-y-auto [&::-webkit-scrollbar]:hidden"
+          style={{ scrollbarWidth: "none" }}
+        >
+          <ul className="flex flex-col gap-0.5 list-none m-0 p-0">
+            {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = currentPage === item.id;
-              
+              const active = currentPage === item.id;
+
               return (
-                <div key={item.id} className="relative group">
+                <li key={item.id} className="relative group/item">
                   <button
-                    onClick={() => handleNavigationClick(item.id)}
+                    onClick={() => onPageChange(item.id)}
+                    title={!isExpanded ? item.name : undefined}
                     className={cn(
-                      "transition-all duration-300 flex items-center relative overflow-hidden",
-                      "hover:scale-110 hover:shadow-lg",
-                      isExpanded 
-                        ? "w-full px-4 py-3 justify-start rounded-xl" 
-                        : "w-12 h-12 justify-center mx-auto rounded-full",
-                      isChromatic && "chromatic-nav-item"
+                      "w-full flex items-center gap-2.5 rounded-xl transition-colors duration-150 outline-none",
+                      isExpanded ? "px-3 py-2" : "w-10 h-10 mx-auto justify-center"
                     )}
                     style={{
-                      backgroundColor: isActive
-                        ? colors.primary
-                        : `${colors.primary}15`,
-                      color: colors.foreground,
-                      boxShadow: isActive && isChromatic
-                        ? `0 4px 12px rgba(${hexToRgb(colors.primary)}, 0.3)`
-                        : 'none',
+                      backgroundColor: active ? primary : "transparent",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!active) (e.currentTarget as HTMLButtonElement).style.backgroundColor = `${primary}16`;
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!active) (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent";
                     }}
                   >
-                    <Icon 
-                      className="w-5 h-5 flex-shrink-0 transition-colors duration-300"
-                      style={{
-                        color: isActive ? 'white' : colors.primary,
-                      }}
+                    <Icon
+                      className="flex-shrink-0"
+                      style={{ width: 17, height: 17, color: active ? "white" : primary }}
                     />
-                    
                     {isExpanded && (
-                      <div className="ml-3 overflow-hidden">
-                        <div
-                          className="font-medium text-sm whitespace-nowrap transition-colors duration-300"
-                          style={{
-                            color: isActive ? 'white' : colors.foreground,
-                          }}
+                      <>
+                        <span
+                          className="text-sm font-medium truncate flex-1 text-left leading-tight"
+                          style={{ color: active ? "white" : colors.foreground }}
                         >
                           {item.name}
-                        </div>
-                        {isActive && (
-                          <div
-                            className="text-xs mt-0.5 whitespace-nowrap"
-                            style={{
-                              color: isActive ? 'rgba(255, 255, 255, 0.7)' : `${colors.foreground}70`,
-                            }}
-                          >
-                            {item.description}
-                          </div>
+                        </span>
+                        {active && (
+                          <span
+                            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: "rgba(255,255,255,0.65)" }}
+                          />
                         )}
-                      </div>
-                    )}
-                    
-                    {/* Active indicator */}
-                    {isActive && !isExpanded && (
-                      <>
-                        <div 
-                          className="absolute inset-0 rounded-full animate-pulse"
-                          style={{
-                            backgroundColor: `${colors.primary}20`,
-                          }}
-                        />
-                        <div 
-                          className="absolute -right-2 top-1/2 -translate-y-1/2 w-1 h-6 rounded-l-full"
-                          style={{
-                            backgroundColor: colors.primary,
-                          }}
-                        />
                       </>
-                    )}
-                    
-                    {/* Active indicator for expanded state */}
-                    {isActive && isExpanded && (
-                      <div 
-                        className="absolute right-2 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full animate-pulse"
-                        style={{
-                          backgroundColor: 'white',
-                        }}
-                      />
                     )}
                   </button>
 
-                  {/* Tooltip for collapsed state */}
+                  {/* Tooltip — collapsed only */}
                   {!isExpanded && (
                     <div
-                      className="absolute left-full ml-4 px-3 py-2 rounded-xl opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none whitespace-nowrap z-50 shadow-lg transform translate-x-2 group-hover:translate-x-0"
+                      className="absolute left-full ml-2.5 top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-xl shadow-lg pointer-events-none z-50 opacity-0 group-hover/item:opacity-100 transition-opacity duration-150 whitespace-nowrap"
                       style={{
-                        background: `linear-gradient(to br, ${colors.primary}, ${colors.secondary})`,
-                        color: 'white',
+                        background: `linear-gradient(135deg, ${primary}, ${darken(primary, -15)})`,
+                        color: "white",
                       }}
                     >
-                      <div className="font-medium text-sm">{item.name}</div>
-                      <div className="text-xs opacity-75 mt-1">{item.description}</div>
-                      {/* Tooltip arrow */}
-                      <div 
-                        className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-2 h-2 rotate-45"
-                        style={{
-                          backgroundColor: colors.primary,
-                        }}
+                      <p className="text-xs font-semibold leading-tight">{item.name}</p>
+                      <p className="text-[10px] opacity-70 leading-tight mt-0.5">{item.description}</p>
+                      {/* Arrow */}
+                      <span
+                        className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent"
+                        style={{ borderRightColor: primary }}
                       />
                     </div>
                   )}
-                </div>
+                </li>
               );
             })}
-          </div>
+          </ul>
         </nav>
 
-        {/* User Profile Section */}
-        <div className="p-4 flex justify-center shrink-0">
-          <Popover open={showAccountMenu} onOpenChange={setShowAccountMenu}>
+        <div className="mx-3" style={dividerStyle} />
+
+        {/* ── User Profile ── */}
+        <div className="p-2 pb-3">
+          <Popover open={showMenu} onOpenChange={setShowMenu}>
             <PopoverTrigger asChild>
-              <div className="relative group">
-                <div 
-                  className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-all duration-300 cursor-pointer"
-                  style={{
-                    background: `linear-gradient(to br, ${colors.primary}, ${adjustBrightness(colors.primary, -20)})`,
-                  }}
+              <button
+                className={cn(
+                  "w-full flex items-center gap-2.5 rounded-xl transition-colors duration-150 outline-none",
+                  isExpanded ? "px-3 py-2" : "w-10 h-10 mx-auto justify-center"
+                )}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = `${primary}14`; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent"; }}
+              >
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white font-semibold text-xs shadow"
+                  style={avatarStyle}
                 >
-                  <span className="text-white font-semibold text-lg">
-                    {currentUser?.initials || "LG"}
-                  </span>
+                  {currentUser?.initials || "?"}
                 </div>
-                
-                {/* Profile tooltip for collapsed state */}
-                {!isExpanded && !showAccountMenu && (
-                  <div
-                    className="absolute left-full ml-4 px-3 py-2 rounded-xl opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none whitespace-nowrap z-50 shadow-lg transform translate-x-2 group-hover:translate-x-0"
-                    style={{
-                      background: `linear-gradient(to br, ${colors.primary}, ${colors.secondary})`,
-                      color: 'white',
-                    }}
-                  >
-                    <div className="font-medium text-sm">{currentUser?.name || "Utilisateur"}</div>
-                    <div className="text-xs opacity-75 mt-1">Cliquez pour gérer le compte</div>
-                    {/* Tooltip arrow */}
-                    <div 
-                      className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 w-2 h-2 rotate-45"
-                      style={{
-                        backgroundColor: colors.primary,
-                      }}
-                    />
-                  </div>
-                )}
-                
-                {/* Profile info for expanded state */}
                 {isExpanded && (
-                  <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 text-center pointer-events-none">
-                    <div
-                      className="font-medium text-sm whitespace-nowrap"
-                      style={{ color: colors.foreground }}
-                    >
-                      {currentUser?.name || "Utilisateur"}
+                  <>
+                    <div className="flex-1 text-left overflow-hidden">
+                      <p className="text-sm font-medium truncate leading-tight" style={{ color: colors.foreground }}>
+                        {currentUser?.name || "Utilisateur"}
+                      </p>
+                      <p className="text-[11px] leading-tight truncate" style={{ color: `${colors.foreground}58` }}>
+                        {roleLabel}
+                      </p>
                     </div>
-                    <div
-                      className="text-xs whitespace-nowrap"
-                      style={{ color: `${colors.foreground}80` }}
-                    >
-                      {currentUser?.role === "admin" ? "Administrateur" : 
-                       currentUser?.role === "controller" ? "Contrôleur" : "Utilisateur"}
-                    </div>
-                  </div>
+                    <ChevronRight
+                      className="flex-shrink-0 opacity-35"
+                      style={{ width: 14, height: 14, color: colors.foreground }}
+                    />
+                  </>
                 )}
-              </div>
+              </button>
             </PopoverTrigger>
-            <PopoverContent className="w-64 p-0" align="end" side="right" sideOffset={16}>
-              <div className="p-4">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-12 h-12 bg-gradient-to-br from-primary to-primary/80 rounded-full flex items-center justify-center">
-                    <span className="text-white font-semibold text-lg">
-                      {currentUser?.initials || "LG"}
-                    </span>
+
+            <PopoverContent className="w-60 p-0" align="end" side="right" sideOffset={10}>
+              <div className="p-3">
+                {/* Current user */}
+                <div className="flex items-center gap-2.5 mb-2.5">
+                  <div
+                    className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-white font-semibold text-sm shadow"
+                    style={avatarStyle}
+                  >
+                    {currentUser?.initials || "?"}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{currentUser?.name || "Utilisateur"}</p>
-                    <p className="text-sm text-muted-foreground truncate">{currentUser?.email}</p>
+                    <p className="text-sm font-semibold truncate leading-tight">{currentUser?.name || "Utilisateur"}</p>
+                    <p className="text-xs text-muted-foreground truncate">{currentUser?.email}</p>
                   </div>
                 </div>
-                
+
                 <Separator className="my-2" />
-                
-                {/* Comptes session et sauvegardés */}
+
+                {/* Account switcher */}
                 {accounts.length > 1 && (
                   <>
-                    <div className="px-2 py-1.5">
-                      <p className="text-xs font-medium text-muted-foreground">Changer de compte</p>
-                    </div>
-                    <div className="max-h-48 overflow-y-auto space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground px-1.5 pb-1">Changer de compte</p>
+                    <div
+                      className="max-h-36 overflow-y-auto [&::-webkit-scrollbar]:hidden space-y-0.5"
+                      style={{ scrollbarWidth: "none" }}
+                    >
                       {accounts
-                        .filter(account => account.email !== currentUser?.email)
+                        .filter((a) => a.email !== currentUser?.email)
                         .map((account) => {
-                          const isSaved = SessionAccountsManager.getSavedAccounts().some(a => a.email === account.email);
-                          
+                          const saved = SessionAccountsManager.getSavedAccounts().some((s) => s.email === account.email);
                           return (
-                            <div key={account.email} className="flex items-center group">
+                            <div key={account.email} className="flex items-center group/acc">
                               <Button
                                 variant="ghost"
-                                className="w-full justify-start flex-1"
-                                onClick={() => {
-                                  switchAccount(account.email);
-                                  setShowAccountMenu(false);
-                                }}
+                                className="flex-1 justify-start h-auto py-1.5 px-1.5 gap-2"
+                                onClick={() => { switchAccount(account.email); setShowMenu(false); }}
                               >
-                                <div className="w-8 h-8 bg-gradient-to-br from-primary/20 to-primary/10 rounded-full flex items-center justify-center mr-2">
-                                  <span className="text-primary font-semibold text-xs">
-                                    {account.initials}
-                                  </span>
+                                <div
+                                  className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-semibold"
+                                  style={{ background: `${primary}20`, color: primary }}
+                                >
+                                  {account.initials}
                                 </div>
                                 <div className="flex-1 text-left min-w-0">
-                                  <p className="text-sm font-medium truncate">{account.name}</p>
-                                  <p className="text-xs text-muted-foreground truncate">{account.email}</p>
+                                  <p className="text-xs font-medium truncate">{account.name}</p>
+                                  <p className="text-[10px] text-muted-foreground truncate">{account.email}</p>
                                 </div>
                               </Button>
-                              
-                              {/* Save/Remove Account Buttons */}
-                              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                                {isSaved ? (
+                              <div className="opacity-0 group-hover/acc:opacity-100 transition-opacity flex-shrink-0">
+                                {saved ? (
                                   <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-950"
-                                    title="Compte sauvegardé - Cliquez pour supprimer"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      SessionAccountsManager.unsaveAccount(account.email);
-                                      setAccounts(SessionAccountsManager.getSessionAccounts());
-                                      toast.info(`✓ Compte non sauvegardé`);
-                                    }}
+                                    variant="ghost" size="sm"
+                                    className="h-7 w-7 p-0 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-950"
+                                    onClick={(e) => { e.stopPropagation(); SessionAccountsManager.unsaveAccount(account.email); setAccounts(SessionAccountsManager.getSessionAccounts()); toast.info("Compte non sauvegardé"); }}
                                   >
-                                    <Trash2 className="w-4 h-4" />
+                                    <Trash2 className="w-3 h-3" />
                                   </Button>
                                 ) : (
                                   <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0 text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-950"
-                                    title="Sauvegarder pour les prochaines sessions"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      SessionAccountsManager.saveAccount({
-                                        ...account,
-                                        isSaved: true
-                                      });
-                                      setAccounts(SessionAccountsManager.getSessionAccounts());
-                                      toast.success(`✓ Compte sauvegardé`);
-                                    }}
+                                    variant="ghost" size="sm"
+                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-950"
+                                    onClick={(e) => { e.stopPropagation(); SessionAccountsManager.saveAccount({ ...account, isSaved: true }); setAccounts(SessionAccountsManager.getSessionAccounts()); toast.success("Compte sauvegardé"); }}
                                   >
-                                    <Save className="w-4 h-4" />
+                                    <Save className="w-3 h-3" />
                                   </Button>
                                 )}
                               </div>
@@ -625,38 +345,21 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
                     <Separator className="my-2" />
                   </>
                 )}
-                
-                <div className="space-y-1">
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start"
-                    onClick={() => {
-                      setShowAddAccountModal(true);
-                    }}
-                  >
-                    <UserPlus className="w-4 h-4 mr-2" />
-                    Ajouter un compte
+
+                {/* Actions */}
+                <div className="space-y-0.5">
+                  <Button variant="ghost" className="w-full justify-start h-8 text-sm gap-2"
+                    onClick={() => setShowAddModal(true)}>
+                    <UserPlus className="w-3.5 h-3.5" /> Ajouter un compte
                   </Button>
-                  
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start"
-                    onClick={() => {
-                      onPageChange("settings");
-                      setShowAccountMenu(false);
-                    }}
-                  >
-                    <UserCog className="w-4 h-4 mr-2" />
-                    Paramètres du compte
+                  <Button variant="ghost" className="w-full justify-start h-8 text-sm gap-2"
+                    onClick={() => { onPageChange("settings"); setShowMenu(false); }}>
+                    <UserCog className="w-3.5 h-3.5" /> Paramètres du compte
                   </Button>
-                  
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start text-red-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
-                    onClick={handleLogout}
-                  >
-                    <LogOut className="w-4 h-4 mr-2" />
-                    Se déconnecter
+                  <Button variant="ghost"
+                    className="w-full justify-start h-8 text-sm gap-2 text-red-600 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                    onClick={() => { logout(); setShowMenu(false); }}>
+                    <LogOut className="w-3.5 h-3.5" /> Se déconnecter
                   </Button>
                 </div>
               </div>
@@ -664,15 +367,11 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
           </Popover>
         </div>
       </div>
-      
-      {/* Add Account Modal */}
-      <AddAccountModal 
-        isOpen={showAddAccountModal}
-        onClose={() => setShowAddAccountModal(false)}
-        onAccountAdded={() => {
-          setAccounts(SessionAccountsManager.getSessionAccounts());
-          toast.success('✓ Compte ajouté à la session!');
-        }}
+
+      <AddAccountModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onAccountAdded={() => { setAccounts(SessionAccountsManager.getSessionAccounts()); toast.success("Compte ajouté à la session!"); }}
       />
     </div>
   );
